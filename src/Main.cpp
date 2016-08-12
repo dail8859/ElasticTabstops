@@ -1,0 +1,196 @@
+// This file is part of ElasticTabstops.
+// 
+// Copyright (C)2016 Justin Dailey <dail8859@yahoo.com>
+// 
+// ElasticTabstops is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either
+// version 2 of the License, or (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+#include "PluginDefinition.h"
+#include "Version.h"
+#include "ElasticTabstops.h"
+#include "AboutDialog.h"
+#include "resource.h"
+#include "Config.h"
+
+static HANDLE _hModule;
+static NppData nppData;
+static Configuration config = { true, nullptr };
+
+// Helper functions
+static HWND getCurrentScintilla();
+static bool shouldProcessCurrentFile();
+
+// Menu callbacks
+static void toggleEnabled();
+static void editSettings();
+static void showAbout();
+
+FuncItem funcItem[] = {
+	{ TEXT("Enable"), toggleEnabled, 0, config.enabled, nullptr },
+	{ TEXT(""), nullptr, 0, false, nullptr }, // separator
+	{ TEXT("Settings..."), editSettings, 0, false, nullptr },
+	{ TEXT("About..."), showAbout, 0, false, nullptr }
+};
+
+static HWND getCurrentScintilla() {
+	int id;
+	SendMessage(nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0, (LPARAM)&id);
+	if (id == 0) return nppData._scintillaMainHandle;
+	else return nppData._scintillaSecondHandle;
+}
+
+static bool shouldProcessCurrentFile() {
+	if (config.file_extensions != nullptr) {
+		wchar_t ext[MAX_PATH] = L"\0";
+		SendMessage(nppData._nppHandle, NPPM_GETEXTPART, MAX_PATH, (LPARAM)ext);
+
+		// Make sure it has an extension
+		if (ext[0] != L'\0') {
+			// Search the file extensions, make sure the char after the located string is blank
+			// This makes sure that searching for .c doesn't find .cpp
+			wchar_t *ptr = wcsstr(config.file_extensions, ext);
+			if (ptr) {
+				wchar_t next = ptr[wcslen(ext)];
+				return next == 0 || next == L' ';
+			}
+		}
+	}
+	else {
+		return true;
+	}
+
+	return false;
+}
+
+BOOL APIENTRY DllMain(HANDLE hModule, DWORD  reasonForCall, LPVOID lpReserved) {
+	switch (reasonForCall) {
+		case DLL_PROCESS_ATTACH:
+			_hModule = hModule;
+			break;
+		case DLL_PROCESS_DETACH:
+			break;
+		case DLL_THREAD_ATTACH:
+			break;
+		case DLL_THREAD_DETACH:
+			break;
+	}
+	return TRUE;
+}
+
+extern "C" __declspec(dllexport) void setInfo(NppData notepadPlusData) {
+	nppData = notepadPlusData;
+}
+
+extern "C" __declspec(dllexport) const wchar_t * getName() {
+	return NPP_PLUGIN_NAME;
+}
+
+extern "C" __declspec(dllexport) FuncItem * getFuncsArray(int *nbF) {
+	*nbF = sizeof(funcItem) / sizeof(funcItem[0]);
+	return funcItem;
+}
+
+extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
+	static bool isFileEnabled = true;
+
+	// Somehow we are getting notifications from other scintilla handles at times
+	if (notify->nmhdr.hwndFrom != nppData._nppHandle &&
+		notify->nmhdr.hwndFrom != nppData._scintillaMainHandle &&
+		notify->nmhdr.hwndFrom != nppData._scintillaSecondHandle)
+		return;
+
+	switch (notify->nmhdr.code) {
+		case SCN_MODIFIED: {
+			if (!config.enabled || !isFileEnabled) break;
+
+			if (notify->modificationType & (SC_MOD_INSERTTEXT | SC_MOD_CHANGESTYLE))
+				ElasticTabstops_OnModify(getCurrentScintilla(), notify->position, notify->position + notify->length);
+			else if (notify->modificationType & SC_MOD_DELETETEXT)
+				ElasticTabstops_OnModify(getCurrentScintilla(), notify->position, notify->position);
+			break;
+		}
+		case SCN_ZOOM: {
+			if (!config.enabled || !isFileEnabled) break;
+
+			// Redo the entire document since the tab sizes have changed
+			HWND sci = getCurrentScintilla();
+			ElasticTabstops_OnModify(sci, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
+			break;
+		}
+		case NPPN_READY:
+			ConfigLoad(&nppData, &config);
+			CheckMenuItem(GetMenu(nppData._nppHandle), funcItem[0]._cmdID, config.enabled ? MF_CHECKED : MF_UNCHECKED);
+			break;
+		case NPPN_SHUTDOWN:
+			ConfigSave(&nppData, &config);
+			break;
+		case NPPN_BUFFERACTIVATED:
+			if (!config.enabled) break;
+
+			isFileEnabled = shouldProcessCurrentFile();
+
+			if (isFileEnabled) {
+				HWND sci = getCurrentScintilla();
+				ElasticTabstops_OnModify(sci, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
+			}
+
+			break;
+		case NPPN_FILESAVED: {
+			wchar_t fname[MAX_PATH];
+			SendMessage(nppData._nppHandle, NPPM_GETFULLPATHFROMBUFFERID, notify->nmhdr.idFrom, (LPARAM)fname);
+			if (wcscmp(fname, GetIniFilePath(&nppData)) == 0) {
+				ConfigLoad(&nppData, &config);
+				CheckMenuItem(GetMenu(nppData._nppHandle), funcItem[0]._cmdID, config.enabled ? MF_CHECKED : MF_UNCHECKED);
+			}
+			break;
+		}
+	}
+	return;
+}
+
+extern "C" __declspec(dllexport) LRESULT messageProc(UINT Message, WPARAM wParam, LPARAM lParam) {
+	return TRUE;
+}
+
+extern "C" __declspec(dllexport) BOOL isUnicode() {
+	return TRUE;
+}
+
+static void toggleEnabled() {
+	config.enabled = !config.enabled;
+	SendMessage(nppData._nppHandle, NPPM_SETMENUITEMCHECK, funcItem[0]._cmdID, config.enabled);
+
+	HWND sci = getCurrentScintilla();
+
+	if (config.enabled && shouldProcessCurrentFile()) {
+		// Run it on the entire file
+		ElasticTabstops_OnModify(sci, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
+	}
+	else {
+		// Clear all tabstops on the file
+		int lineCount = SendMessage(sci, SCI_GETLINECOUNT, 0, 0);
+		for (int i = 0; i < lineCount; ++i) {
+			SendMessage(sci, SCI_CLEARTABSTOPS, i, 0);
+		}
+	}
+}
+
+static void editSettings() {
+	ConfigSave(&nppData, &config);
+	SendMessage(nppData._nppHandle, NPPM_DOOPEN, 0, (LPARAM)GetIniFilePath(&nppData));
+}
+
+static void showAbout() {
+	CreateDialog((HINSTANCE)_hModule, MAKEINTRESOURCE(IDD_ABOUTDLG), nppData._nppHandle, abtDlgProc);
+}
