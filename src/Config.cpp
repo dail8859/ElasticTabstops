@@ -51,13 +51,13 @@ void ConfigLoad(const NppData *nppData, Configuration *config) {
 				config->file_extensions = nullptr;
 			}
 
+			// Strip the newline
+			line[strcspn(line, "\r\n")] = 0;
+
 			char *c = &line[11];
 			while (isspace(*c)) c++;
 
-			if (c && *c == '*') continue;
-
-			// Strip the newline
-			line[strcspn(line, "\r\n")] = 0;
+			if (*c == '\0' || *c == '*') continue;
 
 			wchar_t ws[256];
 			mbstowcs(ws, c, 256);

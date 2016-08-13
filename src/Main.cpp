@@ -52,7 +52,7 @@ static HWND getCurrentScintilla() {
 
 static bool shouldProcessCurrentFile() {
 	if (config.file_extensions != nullptr) {
-		wchar_t ext[MAX_PATH] = L"\0";
+		wchar_t ext[MAX_PATH] = { 0 };
 		SendMessage(nppData._nppHandle, NPPM_GETEXTPART, MAX_PATH, (LPARAM)ext);
 
 		// Make sure it has an extension
@@ -114,7 +114,7 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 		case SCN_MODIFIED: {
 			if (!config.enabled || !isFileEnabled) break;
 
-			if (notify->modificationType & (SC_MOD_INSERTTEXT | SC_MOD_CHANGESTYLE))
+			if (notify->modificationType & SC_MOD_INSERTTEXT)
 				ElasticTabstops_OnModify(getCurrentScintilla(), notify->position, notify->position + notify->length);
 			else if (notify->modificationType & SC_MOD_DELETETEXT)
 				ElasticTabstops_OnModify(getCurrentScintilla(), notify->position, notify->position);
@@ -147,7 +147,7 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 
 			break;
 		case NPPN_FILESAVED: {
-			wchar_t fname[MAX_PATH];
+			wchar_t fname[MAX_PATH] = { 0 };
 			SendMessage(nppData._nppHandle, NPPM_GETFULLPATHFROMBUFFERID, notify->nmhdr.idFrom, (LPARAM)fname);
 			if (wcscmp(fname, GetIniFilePath(&nppData)) == 0) {
 				ConfigLoad(&nppData, &config);

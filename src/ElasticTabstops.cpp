@@ -17,7 +17,8 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-#include <malloc.h>
+#include <vector>
+#include <string>
 #include "ElasticTabstops.h"
 
 static SciFnDirect Scintilla_DirectFunction;
@@ -48,14 +49,14 @@ static bool is_line_end(sptr_t edit, int pos)
 
 struct et_tabstop
 {
-	int text_width_pix;
-	int *widest_width_pix;
-	bool ends_in_tab;
+	int text_width_pix = 0;
+	int *widest_width_pix = nullptr;
+	bool ends_in_tab = false;
 };
 
 struct et_line
 {
-	int num_tabs;
+	int num_tabs = 0;
 };
 
 enum direction
@@ -65,18 +66,19 @@ enum direction
 };
 
 
-static et_tabstop* grid_buffer = NULL;
-static int grid_buffer_size = 0;
 static int tab_width_minimum;
 static int tab_width_padding;
 
 
 static int get_text_width(sptr_t edit, int start, int end)
 {
+	std::string s;
+	s.resize(end - start + 1);
+
 	TextRange range;
 	range.chrg.cpMin = start;
 	range.chrg.cpMax = end;
-	range.lpstrText = (char*)_alloca(end - start + 1);
+	range.lpstrText = &s[0];
 	call_edit(edit, SCI_GETTEXTRANGE, 0, (sptr_t)&range);
 
 	LONG_PTR style = call_edit(edit, SCI_GETSTYLEAT, start);
@@ -113,7 +115,6 @@ static bool change_line(sptr_t edit, int& location, direction which_dir)
 
 static int get_block_boundary(sptr_t edit, int& location, direction which_dir)
 {
-	int current_pos;
 	int max_tabs = 0;
 	bool orig_line = true;
 
@@ -122,7 +123,7 @@ static int get_block_boundary(sptr_t edit, int& location, direction which_dir)
 	{
 		int tabs_on_line = 0;
 
-		current_pos = location;
+		int current_pos = location;
 		unsigned char current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
 		bool current_char_ends_line = is_line_end(edit, current_pos);
 
@@ -180,32 +181,17 @@ static int get_nof_tabs_between(sptr_t edit, int start, int end)
 
 static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_nof_lines, int max_tabs)
 {
-	int l, t;
-	et_line* lines = (et_line*)_alloca(sizeof(et_line) * block_nof_lines);
-	memset(lines, 0, sizeof(et_line) * block_nof_lines);
+	std::vector<et_line> lines(block_nof_lines);
+	std::vector<et_tabstop> grid_buffer(__max(1, block_nof_lines * max_tabs));
 
-	int new_buffer_size = sizeof(et_tabstop) * __max(1, block_nof_lines * max_tabs);
-	if (new_buffer_size > grid_buffer_size)
+	std::vector<et_tabstop*> grid(block_nof_lines);
+	for (int l = 0; l < block_nof_lines; l++)
 	{
-		et_tabstop* new_buffer = (et_tabstop*)realloc(grid_buffer, new_buffer_size);
-		if (new_buffer == NULL)
-		{
-			free(grid_buffer);
-			return;
-		}
-		grid_buffer = new_buffer;
-		grid_buffer_size = new_buffer_size;
-	}
-	memset(grid_buffer, 0, new_buffer_size);
-
-	et_tabstop** grid = (et_tabstop**)_alloca(sizeof(et_tabstop*) * block_nof_lines);
-	for (l = 0; l < block_nof_lines; l++)
-	{
-		grid[l] = grid_buffer + (l * max_tabs);
+		grid[l] = &grid_buffer[l * max_tabs];
 	}
 
 	// get width of text in cells
-	for (l = 0; l < block_nof_lines; l++) // for each line
+	for (int l = 0; l < block_nof_lines; l++) // for each line
 	{
 		int text_width_in_tab = 0;
 		int current_line_num = block_start_linenum + l;
@@ -254,12 +240,12 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_nof
 	}
 
 	// find columns blocks and stretch to fit the widest cell
-	for (t = 0; t < max_tabs; t++) // for each column
+	for (int t = 0; t < max_tabs; t++) // for each column
 	{
 		bool starting_new_block = true;
 		int first_line_in_block = 0;
 		int max_width = 0;
-		for (l = 0; l < block_nof_lines; l++) // for each line
+		for (int l = 0; l < block_nof_lines; l++) // for each line
 		{
 			if (starting_new_block)
 			{
@@ -284,16 +270,16 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_nof
 	}
 
 	// set tabstops
-	for (l = 0; l < block_nof_lines; l++) // for each line
+	for (int l = 0; l < block_nof_lines; l++) // for each line
 	{
 		int current_line_num = block_start_linenum + l;
 		int acc_tabstop = 0;
 
 		call_edit(edit, SCI_CLEARTABSTOPS, current_line_num);
 
-		for (t = 0; t < lines[l].num_tabs; t++)
+		for (int t = 0; t < lines[l].num_tabs; t++)
 		{
-			if (grid[l][t].widest_width_pix != NULL)
+			if (grid[l][t].widest_width_pix != nullptr)
 			{
 				acc_tabstop += *(grid[l][t].widest_width_pix);
 				call_edit(edit, SCI_ADDTABSTOP, current_line_num, acc_tabstop);
@@ -304,11 +290,13 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_nof
 			}
 		}
 	}
+
+	return;
 }
 
 void ElasticTabstops_OnModify(HWND sci, int start, int end)
 {
-	// Get the direction pointer and function. Not the cleanest but it works for now
+	// Get the direct pointer and function. Not the cleanest but it works for now
 	sptr_t edit = SendMessage(sci, SCI_GETDIRECTPOINTER, 0, 0);
 	Scintilla_DirectFunction = (SciFnDirect)SendMessage(sci, SCI_GETDIRECTFUNCTION, 0, 0);
 
