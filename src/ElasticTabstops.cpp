@@ -72,8 +72,7 @@ static int tab_width_padding;
 
 static int get_text_width(sptr_t edit, int start, int end)
 {
-	std::string s;
-	s.resize(end - start + 1);
+	std::string s(end - start + 1, 0);
 
 	TextRange range;
 	range.chrg.cpMin = start;
@@ -183,8 +182,8 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_nof
 {
 	std::vector<et_line> lines(block_nof_lines);
 	std::vector<et_tabstop> grid_buffer(__max(1, block_nof_lines * max_tabs));
-
 	std::vector<et_tabstop*> grid(block_nof_lines);
+
 	for (int l = 0; l < block_nof_lines; l++)
 	{
 		grid[l] = &grid_buffer[l * max_tabs];
@@ -294,7 +293,7 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_nof
 	return;
 }
 
-void ElasticTabstops_OnModify(HWND sci, int start, int end)
+void ElasticTabstops_OnModify(HWND sci, const Configuration *config, int start, int end)
 {
 	// Get the direct pointer and function. Not the cleanest but it works for now
 	sptr_t edit = SendMessage(sci, SCI_GETDIRECTPOINTER, 0, 0);
@@ -304,9 +303,11 @@ void ElasticTabstops_OnModify(HWND sci, int start, int end)
 	if (call_edit(edit, SCI_GETUSETABS) == 0) return;
 
 	// Adjust widths based on character size
+	// The width of a tab is (tab_width_minimum + tab_width_padding)
+	// Since the user can adjust the padding we adjust the minimum
 	const int char_width = call_edit(edit, SCI_TEXTWIDTH, STYLE_DEFAULT, (LONG_PTR)"A");
-	tab_width_padding = char_width;
-	tab_width_minimum = char_width * call_edit(edit, SCI_GETTABWIDTH) - tab_width_padding;
+	tab_width_padding = char_width * config->min_padding;
+	tab_width_minimum = __max(char_width * call_edit(edit, SCI_GETTABWIDTH) - tab_width_padding, 0);
 
 	int max_tabs_between = get_nof_tabs_between(edit, start, end);
 	int max_tabs_backwards = get_block_boundary(edit, start, BACKWARDS);

@@ -23,6 +23,7 @@
 typedef struct Configuration{
 	bool enabled;
 	wchar_t *file_extensions;
+	size_t min_padding;
 }Configuration;
 
 const wchar_t *GetIniFilePath(const NppData *nppData);

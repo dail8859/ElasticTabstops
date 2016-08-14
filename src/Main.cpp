@@ -25,7 +25,7 @@
 
 static HANDLE _hModule;
 static NppData nppData;
-static Configuration config = { true, nullptr };
+static Configuration config = { true, nullptr, 1};
 
 // Helper functions
 static HWND getCurrentScintilla();
@@ -115,9 +115,9 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			if (!config.enabled || !isFileEnabled) break;
 
 			if (notify->modificationType & SC_MOD_INSERTTEXT)
-				ElasticTabstops_OnModify(getCurrentScintilla(), notify->position, notify->position + notify->length);
+				ElasticTabstops_OnModify(getCurrentScintilla(), &config, notify->position, notify->position + notify->length);
 			else if (notify->modificationType & SC_MOD_DELETETEXT)
-				ElasticTabstops_OnModify(getCurrentScintilla(), notify->position, notify->position);
+				ElasticTabstops_OnModify(getCurrentScintilla(), &config, notify->position, notify->position);
 			break;
 		}
 		case SCN_ZOOM: {
@@ -125,7 +125,7 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 
 			// Redo the entire document since the tab sizes have changed
 			HWND sci = getCurrentScintilla();
-			ElasticTabstops_OnModify(sci, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
+			ElasticTabstops_OnModify(sci, &config, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
 			break;
 		}
 		case NPPN_READY:
@@ -142,7 +142,7 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 
 			if (isFileEnabled) {
 				HWND sci = getCurrentScintilla();
-				ElasticTabstops_OnModify(sci, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
+				ElasticTabstops_OnModify(sci, &config, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
 			}
 
 			break;
@@ -175,7 +175,7 @@ static void toggleEnabled() {
 
 	if (config.enabled && shouldProcessCurrentFile()) {
 		// Run it on the entire file
-		ElasticTabstops_OnModify(sci, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
+		ElasticTabstops_OnModify(sci, &config, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
 	}
 	else {
 		// Clear all tabstops on the file

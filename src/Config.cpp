@@ -40,6 +40,8 @@ void ConfigLoad(const NppData *nppData, Configuration *config) {
 		// Ignore comments and blank lines
 		if (line[0] == ';' || line[0] == '\r' || line[0] == '\n') continue;
 
+		// TODO: if this next section gets too bloated/complicated come up with a better way
+
 		if (strncmp(line, "enabled ", 8) == 0) {
 			char *c = &line[8];
 			while (isspace(*c)) c++;
@@ -63,6 +65,16 @@ void ConfigLoad(const NppData *nppData, Configuration *config) {
 			mbstowcs(ws, c, 256);
 			config->file_extensions = wcsdup(ws);
 		}
+		else if (strncmp(line, "padding ", 8) == 0) {
+			char *c = &line[8];
+			while (isspace(*c)) c++;
+
+			config->min_padding = strtol(c, nullptr, 10);
+
+			// The above could fail or the user types something crazy
+			if (config->min_padding > 256) config->min_padding = 256;
+			if (config->min_padding == 0) config->min_padding = 1;
+		}
 	}
 
 	fclose(file);
@@ -76,17 +88,22 @@ void ConfigSave(const NppData *nppData, const Configuration *config) {
 	if (file == nullptr) return;
 
 	fputs("; Configuration for ElasticTabstops.\n; Saving this file will immediately apply the settings.\n\n", file);
+
+	// Whether or not it is enabled
 	fputs("; Whether elastic tabstops are enabled or not: true or false\n", file);
 	fprintf(file, "enabled %s\n\n", config->enabled == true ? "true" : "false");
 
+	// The file extensions to appy it to
 	fputs("; File extentions to apply elastic tabstops. For example...\n", file);
 	fputs(";   \"extentions *\" will apply it to all files\n", file);
 	fputs(";   \"extentions .c .h .cpp .hpp\" will apply it to C/C++ files\n", file);
-
 	if (config->file_extensions != nullptr) wcstombs(s, config->file_extensions, 256);
 	else strcpy(s, "*");
+	fprintf(file, "extensions %s\n\n", s);
 
-	fprintf(file, "extensions %s\n", s);
+	// Minimum padding
+	fputs("; Minimum padding in characters. Must be > 0\n", file);
+	fprintf(file, "padding %d\n", config->min_padding);
 
 	fclose(file);
 }
