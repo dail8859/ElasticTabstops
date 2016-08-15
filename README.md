@@ -2,7 +2,8 @@
 
 Notepad++ plugin for [Elastic Tabstops](http://nickgravgaard.com/elastic-tabstops/). 
 
-The release versions can be downloaded [here](https://github.com/dail8859/ElasticTabstops/releases).
+## Installation
+Download one of the [releases](https://github.com/dail8859/ElasticTabstops/releases) and extract the DLL. Copy this into Notepad++'s plugin directory. This will either be located in the installation directory or under `%APPDATA%\Notepad++\plugins`.
 
 ## Development
 The code has been developed using MSVC 2013. Building the "Unicode Release" will generate the DLL which can be used by Notepad++. For convenience, MSVC copies the built DLL into the Notepad++ plugin directory. 
