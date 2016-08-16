@@ -114,10 +114,25 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 		case SCN_MODIFIED: {
 			if (!config.enabled || !isFileEnabled) break;
 
-			if (notify->modificationType & SC_MOD_INSERTTEXT)
-				ElasticTabstops_OnModify(getCurrentScintilla(), &config, notify->position, notify->position + notify->length);
-			else if (notify->modificationType & SC_MOD_DELETETEXT)
-				ElasticTabstops_OnModify(getCurrentScintilla(), &config, notify->position, notify->position);
+			bool isInsert = (notify->modificationType & SC_MOD_INSERTTEXT) != 0;
+			bool isDelete = (notify->modificationType & SC_MOD_DELETETEXT) != 0;
+
+			// Make sure we only look at inserts and deletes
+			if (!isInsert && !isDelete) break;
+
+			bool isUserAction = (notify->modificationType & SC_PERFORMED_USER) != 0;
+			bool isUndoRedo = (notify->modificationType & (SC_PERFORMED_REDO | SC_PERFORMED_UNDO)) != 0;
+			bool isLastStep = (notify->modificationType & SC_LASTSTEPINUNDOREDO) != 0;
+
+			// Undo/Redo can come in multiple steps. Only update tabstops on the last step.
+			// This can help to reduce lag spikes on complex undo/redo actions
+			if (isUserAction || (isUndoRedo && isLastStep)) {
+				HWND sci = getCurrentScintilla();
+				int start = notify->position;
+				int end = (isInsert ? notify->position + notify->length : notify->position);
+				ElasticTabstops_OnModify(sci, &config, start, end);
+			}
+
 			break;
 		}
 		case SCN_ZOOM: {
