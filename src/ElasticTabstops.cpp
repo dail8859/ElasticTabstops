@@ -82,6 +82,9 @@ static int get_text_width(sptr_t edit, int start, int end)
 
 	LONG_PTR style = call_edit(edit, SCI_GETSTYLEAT, start);
 
+	// NOTE: the width is measured in case proportional fonts are used. 
+	// If we assume monospaced fonts we could simplify measuring text widths eg (end-start)*char_width
+	// But for now performance shouldn't be too much of an issue
 	return call_edit(edit, SCI_TEXTWIDTH, style, (LONG_PTR)range.lpstrText);
 }
 
@@ -120,32 +123,27 @@ static int get_block_boundary(sptr_t edit, int& location, direction which_dir)
 	location = get_line_start(edit, location);
 	do
 	{
-		int tabs_on_line = 0;
-
 		int current_pos = location;
 		unsigned char current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
-		bool current_char_ends_line = is_line_end(edit, current_pos);
+		int line_end = get_line_end(edit, current_pos);
+		int tabs_on_line = 0;
 
-		while (current_char != '\0' && !current_char_ends_line)
+		while (current_char != '\0' && current_pos != line_end)
 		{
 			if (current_char == '\t')
-			{
 				tabs_on_line++;
-				if (tabs_on_line > max_tabs)
-				{
-					max_tabs = tabs_on_line;
-				}
-			}
+
 			current_pos = call_edit(edit, SCI_POSITIONAFTER, current_pos);
 			current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
-			current_char_ends_line = is_line_end(edit, current_pos);
 		}
-		if (tabs_on_line == 0 && !orig_line)
-		{
-			return max_tabs;
-		}
+
+		if (tabs_on_line > max_tabs) max_tabs = tabs_on_line;
+
+		if (tabs_on_line == 0 && !orig_line) return max_tabs;
+
 		orig_line = false;
 	} while (change_line(edit, location, which_dir));
+
 	return max_tabs;
 }
 
@@ -157,24 +155,22 @@ static int get_nof_tabs_between(sptr_t edit, int start, int end)
 	do
 	{
 		unsigned char current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
-		bool current_char_ends_line = is_line_end(edit, current_pos);
-
+		int line_end = get_line_end(edit, current_pos);
 		int tabs_on_line = 0;
-		while (current_char != '\0' && !current_char_ends_line)
+
+		while (current_char != '\0' && current_pos != line_end)
 		{
 			if (current_char == '\t')
-			{
 				tabs_on_line++;
-				if (tabs_on_line > max_tabs)
-				{
-					max_tabs = tabs_on_line;
-				}
-			}
+
 			current_pos = call_edit(edit, SCI_POSITIONAFTER, current_pos);
 			current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
-			current_char_ends_line = is_line_end(edit, current_pos);
 		}
+
+		if (tabs_on_line > max_tabs) max_tabs = tabs_on_line;
+
 	} while (change_line(edit, current_pos, FORWARDS) && current_pos < end);
+
 	return max_tabs;
 }
 
@@ -200,12 +196,12 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_nof
 		int current_pos = call_edit(edit, SCI_POSITIONFROMLINE, current_line_num);
 		int cell_start = current_pos;
 		unsigned char current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
-		bool current_char_ends_line = is_line_end(edit, current_pos);
+		int line_end = get_line_end(edit, current_pos);
 		// maybe change this to search forwards for tabs/newlines
 
 		while (current_char != '\0')
 		{
-			if (current_char_ends_line)
+			if (current_pos == line_end)
 			{
 				grid[l][current_tab_num].ends_in_tab = false;
 				text_width_in_tab = 0;
@@ -234,7 +230,6 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_nof
 			}
 			current_pos = call_edit(edit, SCI_POSITIONAFTER, current_pos);
 			current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
-			current_char_ends_line = is_line_end(edit, current_pos);
 		}
 	}
 
