@@ -256,4 +256,6 @@ paket-files/
 
 /Unicode Release
 /Unicode Debug
+/Release
+/Debug
 /ResEdit-x64
