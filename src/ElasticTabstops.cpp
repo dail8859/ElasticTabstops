@@ -23,6 +23,7 @@
 
 #define MARK_UNDERLINE 20
 #define SC_MARGIN_SYBOL 1
+#define DBG_INDICATORS  8
 
 static SciFnDirect Scintilla_DirectFunction;
 
@@ -188,6 +189,17 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_nof
 		grid[l] = &grid_buffer[l * max_tabs];
 	}
 
+#ifdef _DEBUG
+	// Clear all indicators
+	int pos_start = call_edit(edit, SCI_POSITIONFROMLINE, block_start_linenum);
+	int pos_end = call_edit(edit, SCI_POSITIONFROMLINE, block_start_linenum + block_nof_lines);
+	for (int i = 0; i < DBG_INDICATORS; ++i) {
+		call_edit(edit, SCI_SETINDICATORCURRENT, i);
+		call_edit(edit, SCI_INDICATORCLEARRANGE, pos_start, pos_end - pos_start);
+	}
+#endif
+
+
 	// get width of text in cells
 	for (int l = 0; l < block_nof_lines; l++) // for each line
 	{
@@ -212,6 +224,13 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_nof
 			}
 			else if (current_char == '\t')
 			{
+#ifdef _DEBUG
+				// Highlight the cell
+				call_edit(edit, SCI_SETINDICATORCURRENT, current_tab_num % DBG_INDICATORS);
+				if (cell_empty) call_edit(edit, SCI_INDICATORFILLRANGE, current_pos, 1);
+				else call_edit(edit, SCI_INDICATORFILLRANGE, cell_start, current_pos - cell_start + 1);
+#endif
+
 				if (!cell_empty)
 				{
 					text_width_in_tab = get_text_width(edit, cell_start, current_pos);
@@ -318,8 +337,8 @@ void ElasticTabstops_OnModify(HWND sci, const Configuration *config, int start, 
 
 #ifdef _DEBUG
 	call_edit(edit, SCI_MARKERDELETEALL, MARK_UNDERLINE);
-	call_edit(edit, SCI_MARKERADD, block_start_linenum, MARK_UNDERLINE);
-	call_edit(edit, SCI_MARKERADD, block_end_linenum - 1, MARK_UNDERLINE);
+	call_edit(edit, SCI_MARKERADD, block_start_linenum - 1, MARK_UNDERLINE);
+	call_edit(edit, SCI_MARKERADD, block_end_linenum, MARK_UNDERLINE);
 #endif
 
 	stretch_tabstops(edit, block_start_linenum, block_nof_lines, max_tabs);
@@ -327,9 +346,27 @@ void ElasticTabstops_OnModify(HWND sci, const Configuration *config, int start, 
 
 void ElasticTabstops_OnReady(HWND sci) {
 #ifdef _DEBUG
+	// Setup the markers for start/end of the computed block
 	int mask = SendMessage(sci, SCI_GETMARGINMASKN, SC_MARGIN_SYBOL, 0);
 	SendMessage(sci, SCI_SETMARGINMASKN, SC_MARGIN_SYBOL, mask | (1 << MARK_UNDERLINE));
 	SendMessage(sci, SCI_MARKERDEFINE, MARK_UNDERLINE, SC_MARK_UNDERLINE);
 	SendMessage(sci, SCI_MARKERSETBACK, MARK_UNDERLINE, 0x77CC77);
+
+	// Setup indicators for column blocks
+	for (int i = 0; i < DBG_INDICATORS; ++i) {
+		SendMessage(sci, SCI_INDICSETSTYLE, i, INDIC_STRAIGHTBOX);
+		SendMessage(sci, SCI_INDICSETALPHA, i, 200);
+		SendMessage(sci, SCI_INDICSETUNDER, i, true);
+	}
+
+	// Setup indicator colors
+	SendMessage(sci, SCI_INDICSETFORE, 0, 0x90EE90);
+	SendMessage(sci, SCI_INDICSETFORE, 1, 0xE6D8AD);
+	SendMessage(sci, SCI_INDICSETFORE, 2, 0x8080F0);
+	SendMessage(sci, SCI_INDICSETFORE, 3, 0x0035DD);
+	SendMessage(sci, SCI_INDICSETFORE, 4, 0x3939AA);
+	SendMessage(sci, SCI_INDICSETFORE, 5, 0x396CAA);
+	SendMessage(sci, SCI_INDICSETFORE, 6, 0x666622);
+	SendMessage(sci, SCI_INDICSETFORE, 7, 0x2D882D);
 #endif
 }
