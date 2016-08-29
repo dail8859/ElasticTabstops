@@ -354,15 +354,16 @@ void ElasticTabstops_OnReady(HWND sci) {
 
 	// Setup indicators for column blocks
 	for (int i = 0; i < DBG_INDICATORS; ++i) {
-		SendMessage(sci, SCI_INDICSETSTYLE, i, INDIC_STRAIGHTBOX);
+		SendMessage(sci, SCI_INDICSETSTYLE, i, INDIC_FULLBOX);
 		SendMessage(sci, SCI_INDICSETALPHA, i, 200);
+		SendMessage(sci, SCI_INDICSETOUTLINEALPHA, i, 255);
 		SendMessage(sci, SCI_INDICSETUNDER, i, true);
 	}
 
 	// Setup indicator colors
 	SendMessage(sci, SCI_INDICSETFORE, 0, 0x90EE90);
-	SendMessage(sci, SCI_INDICSETFORE, 1, 0xE6D8AD);
-	SendMessage(sci, SCI_INDICSETFORE, 2, 0x8080F0);
+	SendMessage(sci, SCI_INDICSETFORE, 1, 0x8080F0);
+	SendMessage(sci, SCI_INDICSETFORE, 2, 0xE6D8AD);
 	SendMessage(sci, SCI_INDICSETFORE, 3, 0x0035DD);
 	SendMessage(sci, SCI_INDICSETFORE, 4, 0x3939AA);
 	SendMessage(sci, SCI_INDICSETFORE, 5, 0x396CAA);
