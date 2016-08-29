@@ -21,6 +21,9 @@
 #include <string>
 #include "ElasticTabstops.h"
 
+#define MARK_UNDERLINE 20
+#define SC_MARGIN_SYBOL 1
+
 static SciFnDirect Scintilla_DirectFunction;
 
 static LONG_PTR inline call_edit(sptr_t edit, UINT msg, DWORD wp = 0, LONG_PTR lp = 0)
@@ -313,5 +316,20 @@ void ElasticTabstops_OnModify(HWND sci, const Configuration *config, int start, 
 	int block_end_linenum = call_edit(edit, SCI_LINEFROMPOSITION, end);
 	int block_nof_lines = (block_end_linenum - block_start_linenum) + 1;
 
+#ifdef _DEBUG
+	call_edit(edit, SCI_MARKERDELETEALL, MARK_UNDERLINE);
+	call_edit(edit, SCI_MARKERADD, block_start_linenum, MARK_UNDERLINE);
+	call_edit(edit, SCI_MARKERADD, block_end_linenum - 1, MARK_UNDERLINE);
+#endif
+
 	stretch_tabstops(edit, block_start_linenum, block_nof_lines, max_tabs);
+}
+
+void ElasticTabstops_OnReady(HWND sci) {
+#ifdef _DEBUG
+	int mask = SendMessage(sci, SCI_GETMARGINMASKN, SC_MARGIN_SYBOL, 0);
+	SendMessage(sci, SCI_SETMARGINMASKN, SC_MARGIN_SYBOL, mask | (1 << MARK_UNDERLINE));
+	SendMessage(sci, SCI_MARKERDEFINE, MARK_UNDERLINE, SC_MARK_UNDERLINE);
+	SendMessage(sci, SCI_MARKERSETBACK, MARK_UNDERLINE, 0x77CC77);
+#endif
 }

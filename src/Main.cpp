@@ -146,6 +146,7 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 		case NPPN_READY:
 			ConfigLoad(&nppData, &config);
 			CheckMenuItem(GetMenu(nppData._nppHandle), funcItem[0]._cmdID, config.enabled ? MF_CHECKED : MF_UNCHECKED);
+			ElasticTabstops_OnReady(nppData._scintillaMainHandle);
 			break;
 		case NPPN_SHUTDOWN:
 			ConfigSave(&nppData, &config);
