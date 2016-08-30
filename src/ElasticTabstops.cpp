@@ -25,23 +25,26 @@
 #define SC_MARGIN_SYBOL 1
 #define DBG_INDICATORS  8
 
-static SciFnDirect Scintilla_DirectFunction;
+static sptr_t edit;
+static SciFnDirect func;
+static int tab_width_minimum;
+static int tab_width_padding;
 
-static LONG_PTR inline call_edit(sptr_t edit, UINT msg, DWORD wp = 0, LONG_PTR lp = 0)
+static LONG_PTR inline call_edit(UINT msg, DWORD wp = 0, LONG_PTR lp = 0)
 {
-	return Scintilla_DirectFunction(edit, msg, wp, lp);
+	return func(edit, msg, wp, lp);
 }
 
-static int get_line_start(sptr_t edit, int pos)
+static int get_line_start(int pos)
 {
-	int line = call_edit(edit, SCI_LINEFROMPOSITION, pos);
-	return call_edit(edit, SCI_POSITIONFROMLINE, line);
+	int line = call_edit(SCI_LINEFROMPOSITION, pos);
+	return call_edit(SCI_POSITIONFROMLINE, line);
 }
 
-static int get_line_end(sptr_t edit, int pos)
+static int get_line_end(int pos)
 {
-	int line = call_edit(edit, SCI_LINEFROMPOSITION, pos);
-	return call_edit(edit, SCI_GETLINEENDPOSITION, line);
+	int line = call_edit(SCI_LINEFROMPOSITION, pos);
+	return call_edit(SCI_GETLINEENDPOSITION, line);
 }
 
 struct et_tabstop
@@ -56,10 +59,7 @@ enum direction
 	FORWARDS
 };
 
-static int tab_width_minimum;
-static int tab_width_padding;
-
-static int get_text_width(sptr_t edit, int start, int end)
+static int get_text_width(int start, int end)
 {
 	std::string s(end - start + 1, 0);
 
@@ -67,14 +67,14 @@ static int get_text_width(sptr_t edit, int start, int end)
 	range.chrg.cpMin = start;
 	range.chrg.cpMax = end;
 	range.lpstrText = &s[0];
-	call_edit(edit, SCI_GETTEXTRANGE, 0, (sptr_t)&range);
+	call_edit(SCI_GETTEXTRANGE, 0, (sptr_t)&range);
 
-	LONG_PTR style = call_edit(edit, SCI_GETSTYLEAT, start);
+	LONG_PTR style = call_edit(SCI_GETSTYLEAT, start);
 
 	// NOTE: the width is measured in case proportional fonts are used. 
 	// If we assume monospaced fonts we could simplify measuring text widths eg (end-start)*char_width
 	// But for now performance shouldn't be too much of an issue
-	return call_edit(edit, SCI_TEXTWIDTH, style, (LONG_PTR)range.lpstrText);
+	return call_edit(SCI_TEXTWIDTH, style, (LONG_PTR)range.lpstrText);
 }
 
 static int calc_tab_width(int text_width_in_tab)
@@ -86,12 +86,12 @@ static int calc_tab_width(int text_width_in_tab)
 	return text_width_in_tab + tab_width_padding;
 }
 
-static bool change_line(sptr_t edit, int& location, direction which_dir)
+static bool change_line(int& location, direction which_dir)
 {
-	int line = call_edit(edit, SCI_LINEFROMPOSITION, location);
+	int line = call_edit(SCI_LINEFROMPOSITION, location);
 	if (which_dir == FORWARDS)
 	{
-		location = call_edit(edit, SCI_POSITIONFROMLINE, line + 1);
+		location = call_edit(SCI_POSITIONFROMLINE, line + 1);
 	}
 	else
 	{
@@ -99,21 +99,21 @@ static bool change_line(sptr_t edit, int& location, direction which_dir)
 		{
 			return false;
 		}
-		location = call_edit(edit, SCI_POSITIONFROMLINE, line - 1);
+		location = call_edit(SCI_POSITIONFROMLINE, line - 1);
 	}
 	return (location >= 0);
 }
 
-static void get_block_boundary(sptr_t edit, int& location, direction which_dir)
+static int get_block_boundary(int location, direction which_dir)
 {
 	bool orig_line = true;
 
-	location = get_line_start(edit, location);
+	location = get_line_start(location);
 	do
 	{
 		int current_pos = location;
-		unsigned char current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
-		int line_end = get_line_end(edit, current_pos);
+		unsigned char current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
+		int line_end = get_line_end(current_pos);
 		int tabs_on_line = 0;
 
 		while (current_char != '\0' && current_pos != line_end)
@@ -121,46 +121,46 @@ static void get_block_boundary(sptr_t edit, int& location, direction which_dir)
 			if (current_char == '\t')
 				tabs_on_line++;
 
-			current_pos = call_edit(edit, SCI_POSITIONAFTER, current_pos);
-			current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
+			current_pos = call_edit(SCI_POSITIONAFTER, current_pos);
+			current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
 		}
 
-		if (tabs_on_line == 0 && !orig_line) return;
+		if (tabs_on_line == 0 && !orig_line) return location;
 
 		orig_line = false;
-	} while (change_line(edit, location, which_dir));
+	} while (change_line(location, which_dir));
 
-	return;
+	return location;
 }
 
-static int get_nof_tabs_between(sptr_t edit, int start, int end)
+static int get_nof_tabs_between(int start, int end)
 {
-	int current_pos = get_line_start(edit, start);
+	int current_pos = start;
 	int max_tabs = 0;
 
 	do
 	{
-		unsigned char current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
-		int line_end = get_line_end(edit, current_pos);
+		unsigned char current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
+		int line_end = get_line_end(current_pos);
 		int tabs_on_line = 0;
 
-		while (current_char != '\0' && current_pos != line_end)
+		while (current_char != '\0' && current_pos != line_end && current_pos < end)
 		{
 			if (current_char == '\t')
 				tabs_on_line++;
 
-			current_pos = call_edit(edit, SCI_POSITIONAFTER, current_pos);
-			current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
+			current_pos = call_edit(SCI_POSITIONAFTER, current_pos);
+			current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
 		}
 
 		if (tabs_on_line > max_tabs) max_tabs = tabs_on_line;
 
-	} while (change_line(edit, current_pos, FORWARDS) && current_pos < end);
+	} while (change_line(current_pos, FORWARDS) && current_pos < end);
 
 	return max_tabs;
 }
 
-static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_min_end)
+static void stretch_tabstops(int block_start_linenum, int block_min_end)
 {
 	std::vector<std::vector<et_tabstop>> grid;
 	size_t max_tabs = 0;
@@ -170,20 +170,12 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_min
 	// Get width of text in cells until we reach the end of the block
 	do {
 		current_line_num = block_start_linenum + block_nof_lines;
-		int current_pos = call_edit(edit, SCI_POSITIONFROMLINE, current_line_num);
+		int current_pos = call_edit(SCI_POSITIONFROMLINE, current_line_num);
 		int cell_start = current_pos;
 		bool cell_empty = true;
 
-		unsigned char current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
-		int line_end = get_line_end(edit, current_pos);
-
-#ifdef _DEBUG
-		// Clear the indicators for this line
-		for (int i = 0; i < DBG_INDICATORS; ++i) {
-			call_edit(edit, SCI_SETINDICATORCURRENT, i);
-			call_edit(edit, SCI_INDICATORCLEARRANGE, current_pos, line_end - current_pos);
-		}
-#endif
+		unsigned char current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
+		int line_end = get_line_end(current_pos);
 
 		grid.emplace_back();
 		while (current_char != '\0') {
@@ -194,14 +186,14 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_min
 			else if (current_char == '\t') {
 #ifdef _DEBUG
 				// Highlight the cell
-				call_edit(edit, SCI_SETINDICATORCURRENT, grid.back().size() % DBG_INDICATORS);
-				if (cell_empty) call_edit(edit, SCI_INDICATORFILLRANGE, current_pos, 1);
-				else call_edit(edit, SCI_INDICATORFILLRANGE, cell_start, current_pos - cell_start + 1);
+				call_edit(SCI_SETINDICATORCURRENT, grid.back().size() % DBG_INDICATORS);
+				if (cell_empty) call_edit(SCI_INDICATORFILLRANGE, current_pos, 1);
+				else call_edit(SCI_INDICATORFILLRANGE, cell_start, current_pos - cell_start + 1);
 #endif
 
 				int text_width_in_tab = 0;
 				if (!cell_empty) {
-					text_width_in_tab = get_text_width(edit, cell_start, current_pos);
+					text_width_in_tab = get_text_width(cell_start, current_pos);
 				}
 				grid.back().push_back({ calc_tab_width(text_width_in_tab), nullptr });
 				cell_empty = true;
@@ -214,8 +206,8 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_min
 					cell_empty = false;
 				}
 			}
-			current_pos = call_edit(edit, SCI_POSITIONAFTER, current_pos);
-			current_char = (unsigned char)call_edit(edit, SCI_GETCHARAT, current_pos);
+			current_pos = call_edit(SCI_POSITIONAFTER, current_pos);
+			current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
 		}
 
 		block_nof_lines++;
@@ -224,9 +216,8 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_min
 
 #ifdef _DEBUG
 	// Mark the start and end of the block being recomputed
-	call_edit(edit, SCI_MARKERDELETEALL, MARK_UNDERLINE);
-	call_edit(edit, SCI_MARKERADD, block_start_linenum - 1, MARK_UNDERLINE);
-	call_edit(edit, SCI_MARKERADD, __min(block_start_linenum + block_nof_lines, call_edit(edit, SCI_GETLINECOUNT) - 1), MARK_UNDERLINE);
+	call_edit(SCI_MARKERADD, block_start_linenum - 1, MARK_UNDERLINE);
+	call_edit(SCI_MARKERADD, __min(block_start_linenum + block_nof_lines - 1, call_edit(SCI_GETLINECOUNT) - 1), MARK_UNDERLINE);
 #endif
 
 	// find columns blocks and stretch to fit the widest cell
@@ -265,14 +256,14 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_min
 		int current_line_num = block_start_linenum + l;
 		int acc_tabstop = 0;
 
-		call_edit(edit, SCI_CLEARTABSTOPS, current_line_num);
+		call_edit(SCI_CLEARTABSTOPS, current_line_num);
 
 		for (size_t t = 0; t < grid[l].size(); t++)
 		{
 			if (grid[l][t].widest_width_pix != nullptr)
 			{
 				acc_tabstop += *(grid[l][t].widest_width_pix);
-				call_edit(edit, SCI_ADDTABSTOP, current_line_num, acc_tabstop);
+				call_edit(SCI_ADDTABSTOP, current_line_num, acc_tabstop);
 			}
 			else
 			{
@@ -284,28 +275,52 @@ static void stretch_tabstops(sptr_t edit, int block_start_linenum, int block_min
 	return;
 }
 
-void ElasticTabstops_OnModify(HWND sci, const Configuration *config, int start, int end)
-{
+static void setup(HWND sci, const Configuration *config) {
 	// Get the direct pointer and function. Not the cleanest but it works for now
-	sptr_t edit = SendMessage(sci, SCI_GETDIRECTPOINTER, 0, 0);
-	Scintilla_DirectFunction = (SciFnDirect)SendMessage(sci, SCI_GETDIRECTFUNCTION, 0, 0);
-
-	// Only stretch tabs if it is using actual tab characters
-	if (call_edit(edit, SCI_GETUSETABS) == 0) return;
+	edit = SendMessage(sci, SCI_GETDIRECTPOINTER, 0, 0);
+	func = (SciFnDirect)SendMessage(sci, SCI_GETDIRECTFUNCTION, 0, 0);
 
 	// Adjust widths based on character size
 	// The width of a tab is (tab_width_minimum + tab_width_padding)
 	// Since the user can adjust the padding we adjust the minimum
-	const int char_width = call_edit(edit, SCI_TEXTWIDTH, STYLE_DEFAULT, (LONG_PTR)"A");
+	const int char_width = call_edit(SCI_TEXTWIDTH, STYLE_DEFAULT, (LONG_PTR)"A");
 	tab_width_padding = char_width * config->min_padding;
-	tab_width_minimum = __max(char_width * call_edit(edit, SCI_GETTABWIDTH) - tab_width_padding, 0);
+	tab_width_minimum = __max(char_width * call_edit(SCI_GETTABWIDTH) - tab_width_padding, 0);
 
-	get_block_boundary(edit, start, BACKWARDS);
+#ifdef _DEBUG
+	// Clear all the debugging junk, this way it only shows updates when it is actually recomputed
+	call_edit(SCI_MARKERDELETEALL, MARK_UNDERLINE);
+	for (int i = 0; i < DBG_INDICATORS; ++i) {
+		call_edit(SCI_SETINDICATORCURRENT, i);
+		call_edit(SCI_INDICATORCLEARRANGE, 0, call_edit(SCI_GETTEXTLENGTH));
+	}
+#endif
+}
 
-	int block_start_linenum = call_edit(edit, SCI_LINEFROMPOSITION, start);
-	int block_min_end = call_edit(edit, SCI_LINEFROMPOSITION, end);
+void ElasticTabstops_ComputeEntireDoc(HWND sci, const Configuration *config) {
+	setup(sci, config);
+	stretch_tabstops(0, call_edit(SCI_GETLINECOUNT));
+}
 
-	stretch_tabstops(edit, block_start_linenum, block_min_end);
+void ElasticTabstops_OnModify(HWND sci, const Configuration *config, int start, int end, const char *text) {
+	// Only stretch tabs if it is using actual tab characters
+	if (SendMessage(sci, SCI_GETUSETABS, 0, 0) == 0) return;
+
+	// Setup some stuff
+	setup(sci, config);
+
+	// If the modifications happen on a single line, we can do some heuristics to skip some computaions
+	if (strchr(text, '\n') == NULL && strchr(text, '\r') == NULL && strchr(text, '\t') == NULL) {
+		// See if there are any tabs after the inserted text
+		if (get_nof_tabs_between(end, get_line_end(end)) == 0) return;
+	}
+
+	start = get_block_boundary(start, BACKWARDS);
+
+	int block_start_linenum = call_edit(SCI_LINEFROMPOSITION, start);
+	int block_min_end = call_edit(SCI_LINEFROMPOSITION, end);
+
+	stretch_tabstops(block_start_linenum, block_min_end);
 }
 
 void ElasticTabstops_OnReady(HWND sci) {

@@ -127,10 +127,9 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			// Undo/Redo can come in multiple steps. Only update tabstops on the last step.
 			// This can help to reduce lag spikes on complex undo/redo actions
 			if (isUserAction || (isUndoRedo && isLastStep)) {
-				HWND sci = getCurrentScintilla();
 				int start = notify->position;
 				int end = (isInsert ? notify->position + notify->length : notify->position);
-				ElasticTabstops_OnModify(sci, &config, start, end);
+				ElasticTabstops_OnModify(getCurrentScintilla(), &config, start, end, notify->text);
 			}
 
 			break;
@@ -139,14 +138,14 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			if (!config.enabled || !isFileEnabled) break;
 
 			// Redo the entire document since the tab sizes have changed
-			HWND sci = getCurrentScintilla();
-			ElasticTabstops_OnModify(sci, &config, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
+			ElasticTabstops_ComputeEntireDoc(getCurrentScintilla(), &config);
 			break;
 		}
 		case NPPN_READY:
 			ConfigLoad(&nppData, &config);
 			CheckMenuItem(GetMenu(nppData._nppHandle), funcItem[0]._cmdID, config.enabled ? MF_CHECKED : MF_UNCHECKED);
 			ElasticTabstops_OnReady(nppData._scintillaMainHandle);
+			ElasticTabstops_OnReady(nppData._scintillaSecondHandle);
 			break;
 		case NPPN_SHUTDOWN:
 			ConfigSave(&nppData, &config);
@@ -157,8 +156,7 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			isFileEnabled = shouldProcessCurrentFile();
 
 			if (isFileEnabled) {
-				HWND sci = getCurrentScintilla();
-				ElasticTabstops_OnModify(sci, &config, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
+				ElasticTabstops_ComputeEntireDoc(getCurrentScintilla(), &config);
 			}
 
 			break;
@@ -191,7 +189,7 @@ static void toggleEnabled() {
 
 	if (config.enabled && shouldProcessCurrentFile()) {
 		// Run it on the entire file
-		ElasticTabstops_OnModify(sci, &config, 0, SendMessage(sci, SCI_GETTEXTLENGTH, 0, 0));
+		ElasticTabstops_ComputeEntireDoc(sci, &config);
 	}
 	else {
 		// Clear all tabstops on the file
