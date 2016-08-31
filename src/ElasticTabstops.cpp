@@ -30,6 +30,11 @@ static SciFnDirect func;
 static int tab_width_minimum;
 static int tab_width_padding;
 
+enum direction {
+	BACKWARDS,
+	FORWARDS
+};
+
 static LONG_PTR inline call_edit(UINT msg, DWORD wp = 0, LONG_PTR lp = 0)
 {
 	return func(edit, msg, wp, lp);
@@ -47,17 +52,16 @@ static int get_line_end(int pos)
 	return call_edit(SCI_GETLINEENDPOSITION, line);
 }
 
-struct et_tabstop
-{
-	int text_width_pix;
-	int *widest_width_pix;
-};
-
-enum direction
-{
-	BACKWARDS,
-	FORWARDS
-};
+static void clear_debug_marks() {
+#ifdef _DEBUG
+	// Clear all the debugging junk, this way it only shows updates when it is actually recomputed
+	call_edit(SCI_MARKERDELETEALL, MARK_UNDERLINE);
+	for (int i = 0; i < DBG_INDICATORS; ++i) {
+		call_edit(SCI_SETINDICATORCURRENT, i);
+		call_edit(SCI_INDICATORCLEARRANGE, 0, call_edit(SCI_GETTEXTLENGTH));
+	}
+#endif
+}
 
 static int get_text_width(int start, int end)
 {
@@ -134,6 +138,11 @@ static int get_block_boundary(int location, direction which_dir)
 
 static void stretch_tabstops(int block_start_linenum, int block_min_end)
 {
+	struct et_tabstop {
+		int text_width_pix;
+		int *widest_width_pix;
+	};
+
 	std::vector<std::vector<et_tabstop>> grid;
 	size_t max_tabs = 0;
 	int block_nof_lines = 0;
@@ -247,7 +256,7 @@ static void stretch_tabstops(int block_start_linenum, int block_min_end)
 	return;
 }
 
-static void setup(HWND sci, const Configuration *config) {
+void ElasticTabstops_SwitchToScintilla(HWND sci, const Configuration *config) {
 	// Get the direct pointer and function. Not the cleanest but it works for now
 	edit = SendMessage(sci, SCI_GETDIRECTPOINTER, 0, 0);
 	func = (SciFnDirect)SendMessage(sci, SCI_GETDIRECTFUNCTION, 0, 0);
@@ -258,33 +267,26 @@ static void setup(HWND sci, const Configuration *config) {
 	const int char_width = call_edit(SCI_TEXTWIDTH, STYLE_DEFAULT, (LONG_PTR)"A");
 	tab_width_padding = char_width * config->min_padding;
 	tab_width_minimum = __max(char_width * call_edit(SCI_GETTABWIDTH) - tab_width_padding, 0);
-
-#ifdef _DEBUG
-	// Clear all the debugging junk, this way it only shows updates when it is actually recomputed
-	call_edit(SCI_MARKERDELETEALL, MARK_UNDERLINE);
-	for (int i = 0; i < DBG_INDICATORS; ++i) {
-		call_edit(SCI_SETINDICATORCURRENT, i);
-		call_edit(SCI_INDICATORCLEARRANGE, 0, call_edit(SCI_GETTEXTLENGTH));
-	}
-#endif
 }
 
-void ElasticTabstops_ComputeEntireDoc(HWND sci, const Configuration *config) {
-	setup(sci, config);
+void ElasticTabstops_ComputeEntireDoc() {
+	clear_debug_marks();
+
 	stretch_tabstops(0, call_edit(SCI_GETLINECOUNT));
 }
 
-void ElasticTabstops_OnModify(HWND sci, const Configuration *config, int start, int end, const char *text) {
+void ElasticTabstops_OnModify(int start, int end, int linesAdded, const char *text) {
+	clear_debug_marks();
+
 	// Only stretch tabs if it is using actual tab characters
-	if (SendMessage(sci, SCI_GETUSETABS, 0, 0) == 0) return;
+	if (call_edit(SCI_GETUSETABS) == 0) return;
 
-	// Setup some stuff
-	setup(sci, config);
-
-	// If the modifications happen on a single line, we can do some heuristics to skip some computaions
-	if (strchr(text, '\n') == NULL && strchr(text, '\r') == NULL && strchr(text, '\t') == NULL) {
-		// See if there are any tabs after the inserted text
+	// If the modifications happen on a single line and doesnt add/remove tabs, we can do some heuristics to skip some computations
+	if (linesAdded == 0 && strchr(text, '\t') == NULL) {
+		// See if there are any tabs after the inserted/removed text
 		if (get_nof_tabs_between(end, get_line_end(end)) == 0) return;
+
+		// Anything else?
 	}
 
 	start = get_block_boundary(start, BACKWARDS);

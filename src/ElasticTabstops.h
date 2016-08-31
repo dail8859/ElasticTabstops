@@ -3,6 +3,7 @@
 #include "PluginInterface.h"
 #include "Config.h"
 
-void ElasticTabstops_ComputeEntireDoc(HWND sci, const Configuration *config);
-void ElasticTabstops_OnModify(HWND sci, const Configuration *config, int start, int end, const char *text);
+void ElasticTabstops_SwitchToScintilla(HWND sci, const Configuration *config);
+void ElasticTabstops_ComputeEntireDoc();
+void ElasticTabstops_OnModify(int start, int end, int linesAdded, const char *text);
 void ElasticTabstops_OnReady(HWND sci);

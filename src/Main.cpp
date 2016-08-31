@@ -129,7 +129,7 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			if (isUserAction || (isUndoRedo && isLastStep)) {
 				int start = notify->position;
 				int end = (isInsert ? notify->position + notify->length : notify->position);
-				ElasticTabstops_OnModify(getCurrentScintilla(), &config, start, end, notify->text);
+				ElasticTabstops_OnModify(start, end, notify->linesAdded, notify->text);
 			}
 
 			break;
@@ -138,7 +138,7 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			if (!config.enabled || !isFileEnabled) break;
 
 			// Redo the entire document since the tab sizes have changed
-			ElasticTabstops_ComputeEntireDoc(getCurrentScintilla(), &config);
+			ElasticTabstops_ComputeEntireDoc();
 			break;
 		}
 		case NPPN_READY:
@@ -146,6 +146,8 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			CheckMenuItem(GetMenu(nppData._nppHandle), funcItem[0]._cmdID, config.enabled ? MF_CHECKED : MF_UNCHECKED);
 			ElasticTabstops_OnReady(nppData._scintillaMainHandle);
 			ElasticTabstops_OnReady(nppData._scintillaSecondHandle);
+			ElasticTabstops_SwitchToScintilla(getCurrentScintilla(), &config);
+			ElasticTabstops_ComputeEntireDoc();
 			break;
 		case NPPN_SHUTDOWN:
 			ConfigSave(&nppData, &config);
@@ -156,7 +158,8 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			isFileEnabled = shouldProcessCurrentFile();
 
 			if (isFileEnabled) {
-				ElasticTabstops_ComputeEntireDoc(getCurrentScintilla(), &config);
+				ElasticTabstops_SwitchToScintilla(getCurrentScintilla(), &config);
+				ElasticTabstops_ComputeEntireDoc();
 			}
 
 			break;
@@ -166,6 +169,10 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			if (wcscmp(fname, GetIniFilePath(&nppData)) == 0) {
 				ConfigLoad(&nppData, &config);
 				CheckMenuItem(GetMenu(nppData._nppHandle), funcItem[0]._cmdID, config.enabled ? MF_CHECKED : MF_UNCHECKED);
+
+				// Immediately apply the new config to the config file itself
+				ElasticTabstops_SwitchToScintilla(getCurrentScintilla(), &config);
+				ElasticTabstops_ComputeEntireDoc();
 			}
 			break;
 		}
@@ -189,7 +196,7 @@ static void toggleEnabled() {
 
 	if (config.enabled && shouldProcessCurrentFile()) {
 		// Run it on the entire file
-		ElasticTabstops_ComputeEntireDoc(sci, &config);
+		ElasticTabstops_ComputeEntireDoc();
 	}
 	else {
 		// Clear all tabstops on the file
