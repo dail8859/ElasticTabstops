@@ -195,6 +195,8 @@ static void stretch_tabstops(int block_start_linenum, int block_min_end)
 		// We've hit the end of the block
 	} while (grid.back().size() != 0 || current_line_num <= block_min_end);
 
+	if (max_tabs == 0) return;
+
 #ifdef _DEBUG
 	// Mark the start and end of the block being recomputed
 	call_edit(SCI_MARKERADD, block_start_linenum - 1, MARK_UNDERLINE);
@@ -241,15 +243,8 @@ static void stretch_tabstops(int block_start_linenum, int block_min_end)
 
 		for (size_t t = 0; t < grid[l].size(); t++)
 		{
-			if (grid[l][t].widest_width_pix != nullptr)
-			{
-				acc_tabstop += *(grid[l][t].widest_width_pix);
-				call_edit(SCI_ADDTABSTOP, current_line_num, acc_tabstop);
-			}
-			else
-			{
-				break;
-			}
+			acc_tabstop += *(grid[l][t].widest_width_pix);
+			call_edit(SCI_ADDTABSTOP, current_line_num, acc_tabstop);
 		}
 	}
 
@@ -277,9 +272,6 @@ void ElasticTabstops_ComputeEntireDoc() {
 
 void ElasticTabstops_OnModify(int start, int end, int linesAdded, const char *text) {
 	clear_debug_marks();
-
-	// Only stretch tabs if it is using actual tab characters
-	if (call_edit(SCI_GETUSETABS) == 0) return;
 
 	// If the modifications happen on a single line and doesnt add/remove tabs, we can do some heuristics to skip some computations
 	if (linesAdded == 0 && strchr(text, '\t') == NULL) {

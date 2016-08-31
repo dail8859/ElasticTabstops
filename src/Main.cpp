@@ -51,6 +51,10 @@ static HWND getCurrentScintilla() {
 }
 
 static bool shouldProcessCurrentFile() {
+	// See if the file is even using tabs first of all
+	if (SendMessage(getCurrentScintilla(), SCI_GETUSETABS, 0, 0) == 0) return false;
+
+	// Check the file extension
 	if (config.file_extensions != nullptr) {
 		wchar_t ext[MAX_PATH] = { 0 };
 		SendMessage(nppData._nppHandle, NPPM_GETEXTPART, MAX_PATH, (LPARAM)ext);
@@ -192,14 +196,13 @@ static void toggleEnabled() {
 	config.enabled = !config.enabled;
 	SendMessage(nppData._nppHandle, NPPM_SETMENUITEMCHECK, funcItem[0]._cmdID, config.enabled);
 
-	HWND sci = getCurrentScintilla();
-
 	if (config.enabled && shouldProcessCurrentFile()) {
 		// Run it on the entire file
 		ElasticTabstops_ComputeEntireDoc();
 	}
 	else {
 		// Clear all tabstops on the file
+		HWND sci = getCurrentScintilla();
 		int lineCount = SendMessage(sci, SCI_GETLINECOUNT, 0, 0);
 		for (int i = 0; i < lineCount; ++i) {
 			SendMessage(sci, SCI_CLEARTABSTOPS, i, 0);
