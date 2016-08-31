@@ -79,10 +79,7 @@ static int get_text_width(int start, int end)
 
 static int calc_tab_width(int text_width_in_tab)
 {
-	if (text_width_in_tab < tab_width_minimum)
-	{
-		text_width_in_tab = tab_width_minimum;
-	}
+	text_width_in_tab = __max(text_width_in_tab, tab_width_minimum);
 	return text_width_in_tab + tab_width_padding;
 }
 
@@ -104,6 +101,20 @@ static bool change_line(int& location, direction which_dir)
 	return (location >= 0);
 }
 
+static int get_nof_tabs_between(int start, int end) {
+	unsigned char current_char = 0;
+	int tabs = 0;
+
+	while (start < end && (current_char = (unsigned char)call_edit(SCI_GETCHARAT, start))) {
+		if (current_char == '\t') {
+			tabs++;
+		}
+		start = call_edit(SCI_POSITIONAFTER, start);
+	}
+
+	return tabs;
+}
+
 static int get_block_boundary(int location, direction which_dir)
 {
 	bool orig_line = true;
@@ -111,19 +122,7 @@ static int get_block_boundary(int location, direction which_dir)
 	location = get_line_start(location);
 	do
 	{
-		int current_pos = location;
-		unsigned char current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
-		int line_end = get_line_end(current_pos);
-		int tabs_on_line = 0;
-
-		while (current_char != '\0' && current_pos != line_end)
-		{
-			if (current_char == '\t')
-				tabs_on_line++;
-
-			current_pos = call_edit(SCI_POSITIONAFTER, current_pos);
-			current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
-		}
+		int tabs_on_line = get_nof_tabs_between(location, get_line_end(location));
 
 		if (tabs_on_line == 0 && !orig_line) return location;
 
@@ -131,33 +130,6 @@ static int get_block_boundary(int location, direction which_dir)
 	} while (change_line(location, which_dir));
 
 	return location;
-}
-
-static int get_nof_tabs_between(int start, int end)
-{
-	int current_pos = start;
-	int max_tabs = 0;
-
-	do
-	{
-		unsigned char current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
-		int line_end = get_line_end(current_pos);
-		int tabs_on_line = 0;
-
-		while (current_char != '\0' && current_pos != line_end && current_pos < end)
-		{
-			if (current_char == '\t')
-				tabs_on_line++;
-
-			current_pos = call_edit(SCI_POSITIONAFTER, current_pos);
-			current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
-		}
-
-		if (tabs_on_line > max_tabs) max_tabs = tabs_on_line;
-
-	} while (change_line(current_pos, FORWARDS) && current_pos < end);
-
-	return max_tabs;
 }
 
 static void stretch_tabstops(int block_start_linenum, int block_min_end)
