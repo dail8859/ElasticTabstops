@@ -35,7 +35,7 @@ enum direction {
 	FORWARDS
 };
 
-static LONG_PTR inline call_edit(UINT msg, DWORD wp = 0, LONG_PTR lp = 0)
+static inline LONG_PTR call_edit(UINT msg, DWORD wp = 0, LONG_PTR lp = 0)
 {
 	return func(edit, msg, wp, lp);
 }
@@ -119,88 +119,84 @@ static int get_nof_tabs_between(int start, int end) {
 	return tabs;
 }
 
-static int get_block_boundary(int location, direction which_dir)
-{
-	bool orig_line = true;
+struct et_tabstop {
+	int text_width_pix;
+	int *widest_width_pix;
+};
 
-	location = get_line_start(location);
-	do
-	{
-		int tabs_on_line = get_nof_tabs_between(location, get_line_end(location));
+static void measure_cells(std::vector<std::vector<et_tabstop>> &grid, int start_line, int end_line = -1) {
+	int current_pos = call_edit(SCI_POSITIONFROMLINE, start_line);
+	direction which_dir = (start_line <= end_line ? FORWARDS : BACKWARDS);
 
-		if (tabs_on_line == 0 && !orig_line) return location;
-
-		orig_line = false;
-	} while (change_line(location, which_dir));
-
-	return location;
-}
-
-static void stretch_tabstops(int block_start_linenum, int block_min_end)
-{
-	struct et_tabstop {
-		int text_width_pix;
-		int *widest_width_pix;
-	};
-
-	std::vector<std::vector<et_tabstop>> grid;
-	size_t max_tabs = 0;
-	int block_nof_lines = 0;
-	int current_line_num = 0;
-
-	// Get width of text in cells until we reach the end of the block
 	do {
-		current_line_num = block_start_linenum + block_nof_lines;
-		int current_pos = call_edit(SCI_POSITIONFROMLINE, current_line_num);
+		unsigned char current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
+		const int line_end = get_line_end(current_pos);
 		int cell_start = current_pos;
 		bool cell_empty = true;
+		std::vector<et_tabstop> grid_line;
 
-		unsigned char current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
-		int line_end = get_line_end(current_pos);
-
-		grid.emplace_back();
-		while (current_char != '\0') {
-			if (current_pos == line_end) {
-				max_tabs = __max(max_tabs, grid.back().size());
-				break;
-			}
-			else if (current_char == '\t') {
-#ifdef _DEBUG
-				// Highlight the cell
-				call_edit(SCI_SETINDICATORCURRENT, grid.back().size() % DBG_INDICATORS);
-				if (cell_empty) call_edit(SCI_INDICATORFILLRANGE, current_pos, 1);
-				else call_edit(SCI_INDICATORFILLRANGE, cell_start, current_pos - cell_start + 1);
-#endif
-
+		while (current_pos != line_end) {
+			if (current_char == '\t') {
 				int text_width_in_tab = 0;
 				if (!cell_empty) {
 					text_width_in_tab = get_text_width(cell_start, current_pos);
 				}
-				grid.back().push_back({ calc_tab_width(text_width_in_tab), nullptr });
+				grid_line.push_back({ calc_tab_width(text_width_in_tab), nullptr });
+#ifdef _DEBUG
+				// Highlight the cell
+				call_edit(SCI_SETINDICATORCURRENT, grid_line.size() % DBG_INDICATORS);
+				if (cell_empty) call_edit(SCI_INDICATORFILLRANGE, current_pos, 1);
+				else call_edit(SCI_INDICATORFILLRANGE, cell_start, current_pos - cell_start + 1);
+#endif
 				cell_empty = true;
 			}
-			else
-			{
-				if (cell_empty)
-				{
+			else {
+				if (cell_empty) {
 					cell_start = current_pos;
 					cell_empty = false;
 				}
 			}
+
 			current_pos = call_edit(SCI_POSITIONAFTER, current_pos);
 			current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
 		}
 
-		block_nof_lines++;
-		// We've hit the end of the block
-	} while (grid.back().size() != 0 || current_line_num <= block_min_end);
+		if (grid_line.size() == 0 && !(which_dir == FORWARDS && call_edit(SCI_LINEFROMPOSITION, current_pos) <= end_line)) {
+			break;
+		}
 
-	if (max_tabs == 0) return;
+		grid.push_back(grid_line);
+
+		if (current_char == '\0') break;
+	} while (change_line(current_pos, which_dir));
+
+	return;
+}
+
+static void stretch_tabstops(int block_edit_linenum, int block_min_end)
+{
+	std::vector<std::vector<et_tabstop>> grid;
+	size_t max_tabs = 0;
+
+	int block_start_linenum;
+
+	if (block_edit_linenum > 0) {
+		measure_cells(grid, block_edit_linenum - 1, -1);
+		std::reverse(grid.begin(), grid.end());
+	}
+	block_start_linenum = block_edit_linenum - grid.size();
+	measure_cells(grid, block_edit_linenum, block_min_end);
+
+	for (const auto &grid_line : grid) {
+		max_tabs = __max(max_tabs, grid_line.size());
+	}
+
+	if (grid.size() == 0 || max_tabs == 0) return;
 
 #ifdef _DEBUG
 	// Mark the start and end of the block being recomputed
 	call_edit(SCI_MARKERADD, block_start_linenum - 1, MARK_UNDERLINE);
-	call_edit(SCI_MARKERADD, __min(block_start_linenum + block_nof_lines - 1, call_edit(SCI_GETLINECOUNT) - 1), MARK_UNDERLINE);
+	call_edit(SCI_MARKERADD, block_start_linenum + grid.size() - 1, MARK_UNDERLINE);
 #endif
 
 	// find columns blocks and stretch to fit the widest cell
@@ -209,7 +205,7 @@ static void stretch_tabstops(int block_start_linenum, int block_min_end)
 		bool starting_new_block = true;
 		int first_line_in_block = 0;
 		int max_width = 0;
-		for (int l = 0; l < block_nof_lines; l++) // for each line
+		for (size_t l = 0; l < grid.size(); l++) // for each line
 		{
 			if (starting_new_block)
 			{
@@ -234,7 +230,7 @@ static void stretch_tabstops(int block_start_linenum, int block_min_end)
 	}
 
 	// set tabstops
-	for (int l = 0; l < block_nof_lines; l++) // for each line
+	for (size_t l = 0; l < grid.size(); l++) // for each line
 	{
 		int current_line_num = block_start_linenum + l;
 		int acc_tabstop = 0;
@@ -281,12 +277,9 @@ void ElasticTabstops_OnModify(int start, int end, int linesAdded, const char *te
 		// Anything else?
 	}
 
-	start = get_block_boundary(start, BACKWARDS);
-
 	int block_start_linenum = call_edit(SCI_LINEFROMPOSITION, start);
-	int block_min_end = call_edit(SCI_LINEFROMPOSITION, end);
 
-	stretch_tabstops(block_start_linenum, block_min_end);
+	stretch_tabstops(block_start_linenum, block_start_linenum + (linesAdded > 0 ? linesAdded : 0));
 }
 
 void ElasticTabstops_OnReady(HWND sci) {
