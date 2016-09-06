@@ -35,19 +35,16 @@ enum direction {
 	FORWARDS
 };
 
-static inline LONG_PTR call_edit(UINT msg, DWORD wp = 0, LONG_PTR lp = 0)
-{
+static inline LONG_PTR call_edit(UINT msg, DWORD wp = 0, LONG_PTR lp = 0) {
 	return func(edit, msg, wp, lp);
 }
 
-static int get_line_start(int pos)
-{
+static int get_line_start(int pos) {
 	int line = call_edit(SCI_LINEFROMPOSITION, pos);
 	return call_edit(SCI_POSITIONFROMLINE, line);
 }
 
-static int get_line_end(int pos)
-{
+static int get_line_end(int pos) {
 	int line = call_edit(SCI_LINEFROMPOSITION, pos);
 	return call_edit(SCI_GETLINEENDPOSITION, line);
 }
@@ -63,8 +60,7 @@ static void clear_debug_marks() {
 #endif
 }
 
-static int get_text_width(int start, int end)
-{
+static int get_text_width(int start, int end) {
 	std::string s(end - start + 1, 0);
 
 	TextRange range;
@@ -81,23 +77,18 @@ static int get_text_width(int start, int end)
 	return call_edit(SCI_TEXTWIDTH, style, (LONG_PTR)range.lpstrText);
 }
 
-static int calc_tab_width(int text_width_in_tab)
-{
+static int calc_tab_width(int text_width_in_tab) {
 	text_width_in_tab = __max(text_width_in_tab, tab_width_minimum);
 	return text_width_in_tab + tab_width_padding;
 }
 
-static bool change_line(int& location, direction which_dir)
-{
+static bool change_line(int& location, direction which_dir) {
 	int line = call_edit(SCI_LINEFROMPOSITION, location);
-	if (which_dir == FORWARDS)
-	{
+	if (which_dir == FORWARDS) {
 		location = call_edit(SCI_POSITIONFROMLINE, line + 1);
 	}
-	else
-	{
-		if (line <= 0)
-		{
+	else {
+		if (line <= 0) {
 			return false;
 		}
 		location = call_edit(SCI_POSITIONFROMLINE, line - 1);
@@ -173,8 +164,7 @@ static void measure_cells(std::vector<std::vector<et_tabstop>> &grid, int start_
 	return;
 }
 
-static void stretch_tabstops(int block_edit_linenum, int block_min_end)
-{
+static void stretch_tabstops(int block_edit_linenum, int block_min_end) {
 	std::vector<std::vector<et_tabstop>> grid;
 	size_t max_tabs = 0;
 
@@ -200,45 +190,38 @@ static void stretch_tabstops(int block_edit_linenum, int block_min_end)
 #endif
 
 	// find columns blocks and stretch to fit the widest cell
-	for (size_t t = 0; t < max_tabs; t++) // for each column
-	{
+	for (size_t t = 0; t < max_tabs; t++) {
 		bool starting_new_block = true;
 		int first_line_in_block = 0;
 		int max_width = 0;
-		for (size_t l = 0; l < grid.size(); l++) // for each line
-		{
-			if (starting_new_block)
-			{
+		for (size_t l = 0; l < grid.size(); l++) {
+			if (starting_new_block) {
 				starting_new_block = false;
 				first_line_in_block = l;
 				max_width = 0;
 			}
-			if (t < grid[l].size())
-			{
+			if (t < grid[l].size()) {
 				grid[l][t].widest_width_pix = &(grid[first_line_in_block][t].text_width_pix); // point widestWidthPix at first 
-				if (grid[l][t].text_width_pix > max_width)
-				{
+				if (grid[l][t].text_width_pix > max_width) {
 					max_width = grid[l][t].text_width_pix;
 					grid[first_line_in_block][t].text_width_pix = max_width;
 				}
 			}
-			else // end column block
-			{
+			else  {
+				// end column block
 				starting_new_block = true;
 			}
 		}
 	}
 
 	// set tabstops
-	for (size_t l = 0; l < grid.size(); l++) // for each line
-	{
+	for (size_t l = 0; l < grid.size(); l++) {
 		int current_line_num = block_start_linenum + l;
 		int acc_tabstop = 0;
 
 		call_edit(SCI_CLEARTABSTOPS, current_line_num);
 
-		for (size_t t = 0; t < grid[l].size(); t++)
-		{
+		for (size_t t = 0; t < grid[l].size(); t++) {
 			acc_tabstop += *(grid[l][t].widest_width_pix);
 			call_edit(SCI_ADDTABSTOP, current_line_num, acc_tabstop);
 		}
