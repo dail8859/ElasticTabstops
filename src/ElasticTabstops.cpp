@@ -29,6 +29,8 @@ static sptr_t edit;
 static SciFnDirect func;
 static int tab_width_minimum;
 static int tab_width_padding;
+static int char_width;
+static int(*get_text_width)(int start, int end);
 
 enum direction {
 	BACKWARDS,
@@ -60,7 +62,7 @@ static void clear_debug_marks() {
 #endif
 }
 
-static int get_text_width(int start, int end) {
+static int get_text_width_prop(int start, int end) {
 	std::string s(end - start + 1, 0);
 
 	TextRange range;
@@ -71,10 +73,11 @@ static int get_text_width(int start, int end) {
 
 	LONG_PTR style = call_edit(SCI_GETSTYLEAT, start);
 
-	// NOTE: the width is measured in case proportional fonts are used. 
-	// If we assume monospaced fonts we could simplify measuring text widths eg (end-start)*char_width
-	// But for now performance shouldn't be too much of an issue
 	return call_edit(SCI_TEXTWIDTH, style, (LONG_PTR)range.lpstrText);
+}
+
+static int get_text_width_mono(int start, int end) {
+	return (end - start) * char_width;
 }
 
 static int calc_tab_width(int text_width_in_tab) {
@@ -238,9 +241,11 @@ void ElasticTabstops_SwitchToScintilla(HWND sci, const Configuration *config) {
 	// Adjust widths based on character size
 	// The width of a tab is (tab_width_minimum + tab_width_padding)
 	// Since the user can adjust the padding we adjust the minimum
-	const int char_width = call_edit(SCI_TEXTWIDTH, STYLE_DEFAULT, (LONG_PTR)"A");
+	char_width = call_edit(SCI_TEXTWIDTH, STYLE_DEFAULT, (LONG_PTR)"A");
 	tab_width_padding = char_width * config->min_padding;
 	tab_width_minimum = __max(char_width * call_edit(SCI_GETTABWIDTH) - tab_width_padding, 0);
+
+	get_text_width = get_text_width_prop;
 }
 
 void ElasticTabstops_ComputeEntireDoc() {
