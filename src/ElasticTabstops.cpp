@@ -114,8 +114,14 @@ static int get_nof_tabs_between(int start, int end) {
 }
 
 struct et_tabstop {
-	int text_width_pix;
-	int *widest_width_pix;
+	int cell_width_pix; // Width of the cell
+	int text_width_pix; // Width of the text within the cell
+	int *widest_width_pix; // Width of the widest cell
+
+	// Length of the tab
+	int getTabLen() const {
+		return *widest_width_pix - text_width_pix;
+	}
 };
 
 static void measure_cells(std::vector<std::vector<et_tabstop>> &grid, int start_line, int end_line, size_t editted_cell) {
@@ -143,10 +149,10 @@ static void measure_cells(std::vector<std::vector<et_tabstop>> &grid, int start_
 					if (!cell_empty) {
 						text_width_in_tab = get_text_width(cell_start, current_pos);
 					}
-					grid_line.push_back({ calc_tab_width(text_width_in_tab), nullptr });
+					grid_line.push_back({ calc_tab_width(text_width_in_tab), text_width_in_tab, nullptr });
 				}
 				else {
-					grid_line.push_back({ 0, nullptr });
+					grid_line.push_back({ 0, 0, nullptr });
 				}
 				cell_empty = true;
 				cell_num++;
@@ -174,6 +180,33 @@ static void measure_cells(std::vector<std::vector<et_tabstop>> &grid, int start_
 	return;
 }
 
+static void stretch_cells(std::vector<std::vector<et_tabstop>> &grid, size_t start_cell, size_t max_tabs) {
+	// Find columns blocks and stretch to fit the widest cell
+	for (size_t t = start_cell; t < max_tabs; t++) {
+		bool starting_new_block = true;
+		int first_line_in_block = 0;
+		int max_width = 0;
+		for (size_t l = 0; l < grid.size(); l++) {
+			if (starting_new_block) {
+				starting_new_block = false;
+				first_line_in_block = l;
+				max_width = 0;
+			}
+			if (t < grid[l].size()) {
+				grid[l][t].widest_width_pix = &(grid[first_line_in_block][t].cell_width_pix); // point widestWidthPix at first 
+				if (grid[l][t].cell_width_pix > max_width) {
+					max_width = grid[l][t].cell_width_pix;
+					grid[first_line_in_block][t].cell_width_pix = max_width;
+				}
+			}
+			else {
+				// end column block
+				starting_new_block = true;
+			}
+		}
+	}
+}
+
 static void stretch_tabstops(int block_edit_linenum, int block_min_end, int editted_cell) {
 	std::vector<std::vector<et_tabstop>> grid;
 	size_t max_tabs = 0;
@@ -198,30 +231,7 @@ static void stretch_tabstops(int block_edit_linenum, int block_min_end, int edit
 	call_edit(SCI_MARKERADD, block_start_linenum + grid.size() - 1, MARK_UNDERLINE);
 #endif
 
-	// Find columns blocks and stretch to fit the widest cell
-	for (size_t t = editted_cell; t < max_tabs; t++) {
-		bool starting_new_block = true;
-		int first_line_in_block = 0;
-		int max_width = 0;
-		for (size_t l = 0; l < grid.size(); l++) {
-			if (starting_new_block) {
-				starting_new_block = false;
-				first_line_in_block = l;
-				max_width = 0;
-			}
-			if (t < grid[l].size()) {
-				grid[l][t].widest_width_pix = &(grid[first_line_in_block][t].text_width_pix); // point widestWidthPix at first 
-				if (grid[l][t].text_width_pix > max_width) {
-					max_width = grid[l][t].text_width_pix;
-					grid[first_line_in_block][t].text_width_pix = max_width;
-				}
-			}
-			else {
-				// end column block
-				starting_new_block = true;
-			}
-		}
-	}
+	stretch_cells(grid, editted_cell, max_tabs);
 
 	// Anything before the editted cell we can keep because we already know what it is
 	std::vector<int> known_tabstops;
@@ -251,6 +261,29 @@ static void stretch_tabstops(int block_edit_linenum, int block_min_end, int edit
 	}
 
 	return;
+}
+
+static void replace_nth_tab(int linenum, int cellnum, const char *text) {
+	TextToFind ttf;
+
+	ttf.chrg.cpMin = call_edit(SCI_POSITIONFROMLINE, linenum);
+	ttf.chrg.cpMax = call_edit(SCI_GETLINEENDPOSITION, linenum);
+	ttf.lpstrText = "\t";
+
+	int position = INVALID_POSITION;
+	int curcell = -1;
+	do {
+		position = call_edit(SCI_FINDTEXT, 0, (LONG_PTR)&ttf);
+		ttf.chrg.cpMin = position + 1; // Move start of the search forward
+		curcell++;
+	} while (position != INVALID_POSITION && curcell != cellnum);
+
+	if (position == INVALID_POSITION) {
+		return;
+	}
+
+	call_edit(SCI_SETTARGETRANGE, position, position + 1);
+	call_edit(SCI_REPLACETARGET, -1, (LONG_PTR)text);
 }
 
 void ElasticTabstops_SwitchToScintilla(HWND sci, const Configuration *config) {
@@ -290,6 +323,44 @@ void ElasticTabstops_OnModify(int start, int end, int linesAdded, const char *te
 	int block_start_linenum = call_edit(SCI_LINEFROMPOSITION, start);
 
 	stretch_tabstops(block_start_linenum, block_start_linenum + (linesAdded > 0 ? linesAdded : 0), editted_cell);
+}
+
+void ElasticTabstops_ConvertToSpaces() {
+	std::vector<std::vector<et_tabstop>> grid;
+
+	// Recompute the entire document
+	measure_cells(grid, 0, call_edit(SCI_GETLINECOUNT), 0);
+
+	clear_debug_marks();
+
+	size_t max_tabs = 0;
+	for (const auto &grid_line : grid) {
+		max_tabs = __max(max_tabs, grid_line.size());
+	}
+
+	if (grid.size() == 0 || max_tabs == 0) return;
+
+	stretch_cells(grid, 0, max_tabs);
+
+	call_edit(SCI_BEGINUNDOACTION);
+	for (size_t linenum = 0; linenum < grid.size(); ++linenum) {
+		call_edit(SCI_CLEARTABSTOPS, linenum);
+
+		int start_cell = 0;
+		const int default_width = calc_tab_width(0);
+
+		// Assume any leading "normal" tabs are for indentation
+		while (start_cell < (int)grid[linenum].size() &&
+			grid[linenum][start_cell].text_width_pix == 0 &&
+			grid[linenum][start_cell].getTabLen() == default_width) start_cell++;
+
+		// Iterate backwards since tabs are being removed, thus it wouldn't find the correct "nth" tab
+		for (int end_cell = grid[linenum].size() - 1; end_cell >= start_cell; --end_cell) {
+			int spaces = grid[linenum][end_cell].getTabLen() / char_width;
+			replace_nth_tab(linenum, end_cell, std::string(spaces, ' ').c_str());
+		}
+	}
+	call_edit(SCI_ENDUNDOACTION);
 }
 
 void ElasticTabstops_OnReady(HWND sci) {

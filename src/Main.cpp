@@ -33,11 +33,13 @@ static bool shouldProcessCurrentFile();
 
 // Menu callbacks
 static void toggleEnabled();
+static void convertEtToSpaces();
 static void editSettings();
 static void showAbout();
 
 FuncItem funcItem[] = {
 	{ TEXT("Enable"), toggleEnabled, 0, config.enabled, nullptr },
+	{ TEXT("Convert Tabstops to Spaces"), convertEtToSpaces, 0, false, nullptr },
 	{ TEXT(""), nullptr, 0, false, nullptr }, // separator
 	{ TEXT("Settings..."), editSettings, 0, false, nullptr },
 	{ TEXT("About..."), showAbout, 0, false, nullptr }
@@ -209,6 +211,16 @@ static void toggleEnabled() {
 			SendMessage(sci, SCI_CLEARTABSTOPS, i, 0);
 		}
 	}
+}
+
+static void convertEtToSpaces() {
+	if (!config.enabled || !shouldProcessCurrentFile()) return;
+
+	// Temporarily disable elastic tabstops because replacing tabs with spaces causes
+	// Scintilla to send notifications of all the changes.
+	config.enabled = false;
+	ElasticTabstops_ConvertToSpaces();
+	config.enabled = true;
 }
 
 static void editSettings() {
