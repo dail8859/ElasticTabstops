@@ -142,6 +142,7 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			if (!config.enabled || !isFileEnabled) break;
 
 			// Redo the entire document since the tab sizes have changed
+			ElasticTabstops_SwitchToScintilla(getCurrentScintilla(), &config);
 			ElasticTabstops_ComputeEntireDoc();
 			break;
 		}
