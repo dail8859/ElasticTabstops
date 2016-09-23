@@ -75,6 +75,11 @@ void ConfigLoad(const NppData *nppData, Configuration *config) {
 			if (config->min_padding > 256) config->min_padding = 256;
 			if (config->min_padding == 0) config->min_padding = 1;
 		}
+		else if (strncmp(line, "convert_leading_tabs_to_spaces ", 31) == 0) {
+			char *c = &line[31];
+			while (isspace(*c)) c++;
+			config->convert_leading_tabs_to_spaces = strncmp(c, "true", 4) == 0;
+		}
 	}
 
 	fclose(file);
@@ -103,7 +108,11 @@ void ConfigSave(const NppData *nppData, const Configuration *config) {
 
 	// Minimum padding
 	fputs("; Minimum padding in characters. Must be > 0\n", file);
-	fprintf(file, "padding %d\n", config->min_padding);
+	fprintf(file, "padding %d\n\n", config->min_padding);
+
+	// Leading tabs
+	fputs("; Convert leading tabs to spaces: true or false\n", file);
+	fprintf(file, "convert_leading_tabs_to_spaces %s\n", config->convert_leading_tabs_to_spaces == true ? "true" : "false");
 
 	fclose(file);
 }

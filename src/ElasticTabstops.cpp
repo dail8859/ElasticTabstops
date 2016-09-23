@@ -325,7 +325,7 @@ void ElasticTabstops_OnModify(int start, int end, int linesAdded, const char *te
 	stretch_tabstops(block_start_linenum, block_start_linenum + (linesAdded > 0 ? linesAdded : 0), editted_cell);
 }
 
-void ElasticTabstops_ConvertToSpaces() {
+void ElasticTabstops_ConvertToSpaces(const Configuration *config) {
 	std::vector<std::vector<et_tabstop>> grid;
 
 	// Recompute the entire document
@@ -347,12 +347,16 @@ void ElasticTabstops_ConvertToSpaces() {
 		call_edit(SCI_CLEARTABSTOPS, linenum);
 
 		int start_cell = 0;
-		const int default_width = calc_tab_width(0);
 
-		// Assume any leading "normal" tabs are for indentation
-		while (start_cell < (int)grid[linenum].size() &&
-			grid[linenum][start_cell].text_width_pix == 0 &&
-			grid[linenum][start_cell].getTabLen() == default_width) start_cell++;
+		if (!config->convert_leading_tabs_to_spaces) {
+			const int default_width = calc_tab_width(0);
+
+			// Assume any leading "normal" tabs are for indentation
+			while (start_cell < (int)grid[linenum].size() &&
+				grid[linenum][start_cell].text_width_pix == 0 &&
+				grid[linenum][start_cell].getTabLen() == default_width)
+				start_cell++;
+		}
 
 		// Iterate backwards since tabs are being removed, thus it wouldn't find the correct "nth" tab
 		for (int end_cell = grid[linenum].size() - 1; end_cell >= start_cell; --end_cell) {

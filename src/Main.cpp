@@ -25,7 +25,7 @@
 
 static HANDLE _hModule;
 static NppData nppData;
-static Configuration config = { true, nullptr, 1};
+static Configuration config = { true, nullptr, 1, false};
 
 // Helper functions
 static HWND getCurrentScintilla();
@@ -39,6 +39,7 @@ static void showAbout();
 
 FuncItem funcItem[] = {
 	{ TEXT("Enable"), toggleEnabled, 0, config.enabled, nullptr },
+	{ TEXT(""), nullptr, 0, false, nullptr }, // separator
 	{ TEXT("Convert Tabstops to Spaces"), convertEtToSpaces, 0, false, nullptr },
 	{ TEXT(""), nullptr, 0, false, nullptr }, // separator
 	{ TEXT("Settings..."), editSettings, 0, false, nullptr },
@@ -219,7 +220,7 @@ static void convertEtToSpaces() {
 	// Temporarily disable elastic tabstops because replacing tabs with spaces causes
 	// Scintilla to send notifications of all the changes.
 	config.enabled = false;
-	ElasticTabstops_ConvertToSpaces();
+	ElasticTabstops_ConvertToSpaces(&config);
 	config.enabled = true;
 }
 
