@@ -22,12 +22,18 @@
 #include "Hyperlinks.h"
 #include "Version.h"
 
+#ifdef _WIN64
+#define BITNESS TEXT("(64 bit)")
+#else
+#define BITNESS TEXT("(32 bit)")
+#endif
+
 INT_PTR CALLBACK abtDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch(uMsg) {
 		case WM_INITDIALOG:
 			ConvertStaticToHyperlink(hwndDlg, IDC_GITHUB);
 			ConvertStaticToHyperlink(hwndDlg, IDC_README);
-			Edit_SetText(GetDlgItem(hwndDlg, IDC_VERSION), TEXT("Elastic Tabstops v") VERSION_TEXT TEXT(" ") VERSION_STAGE);
+			Edit_SetText(GetDlgItem(hwndDlg, IDC_VERSION), TEXT("Elastic Tabstops v") VERSION_TEXT TEXT(" ") VERSION_STAGE TEXT(" ") BITNESS);
 			return true;
 		case WM_COMMAND:
 			switch(LOWORD(wParam)) {
@@ -43,4 +49,25 @@ INT_PTR CALLBACK abtDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 			return true;
 		}
 	return false;
+}
+
+void ShowAboutDialog(HINSTANCE hInstance, const wchar_t *lpTemplateName, HWND hWndParent) {
+	HWND hSelf = CreateDialogParam((HINSTANCE)hInstance, lpTemplateName, hWndParent, abtDlgProc, NULL);
+
+	// Go to center
+	RECT rc;
+	GetClientRect(hWndParent, &rc);
+	POINT center;
+	int w = rc.right - rc.left;
+	int h = rc.bottom - rc.top;
+	center.x = rc.left + w / 2;
+	center.y = rc.top + h / 2;
+	ClientToScreen(hWndParent, &center);
+
+	RECT dlgRect;
+	GetClientRect(hSelf, &dlgRect);
+	int x = center.x - (dlgRect.right - dlgRect.left) / 2;
+	int y = center.y - (dlgRect.bottom - dlgRect.top) / 2;
+
+	SetWindowPos(hSelf, HWND_TOP, x, y, (dlgRect.right - dlgRect.left), (dlgRect.bottom - dlgRect.top), SWP_SHOWWINDOW);
 }

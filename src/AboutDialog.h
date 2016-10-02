@@ -18,4 +18,4 @@
 
 #pragma once
 
-INT_PTR CALLBACK abtDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+void ShowAboutDialog(HINSTANCE hInstance, const wchar_t *lpTemplateName, HWND hWndParent);
