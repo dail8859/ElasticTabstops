@@ -97,6 +97,7 @@ BOOL APIENTRY DllMain(HANDLE hModule, DWORD  reasonForCall, LPVOID lpReserved) {
 
 extern "C" __declspec(dllexport) void setInfo(NppData notepadPlusData) {
 	nppData = notepadPlusData;
+	ConfigLoad(&nppData, &config);
 }
 
 extern "C" __declspec(dllexport) const wchar_t * getName() {
@@ -150,12 +151,11 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			break;
 		}
 		case NPPN_READY:
-			ConfigLoad(&nppData, &config);
 			CheckMenuItem(GetMenu(nppData._nppHandle), funcItem[0]._cmdID, config.enabled ? MF_CHECKED : MF_UNCHECKED);
 			ElasticTabstops_OnReady(nppData._scintillaMainHandle);
 			ElasticTabstops_OnReady(nppData._scintillaSecondHandle);
 			ElasticTabstops_SwitchToScintilla(getCurrentScintilla(), &config);
-			ElasticTabstops_ComputeEntireDoc();
+			if (config.enabled) ElasticTabstops_ComputeEntireDoc();
 			break;
 		case NPPN_SHUTDOWN:
 			ConfigSave(&nppData, &config);
