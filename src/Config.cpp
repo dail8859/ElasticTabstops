@@ -108,7 +108,7 @@ void ConfigSave(const NppData *nppData, const Configuration *config) {
 
 	// Minimum padding
 	fputs("; Minimum padding in characters. Must be > 0\n", file);
-	fprintf(file, "padding %d\n\n", config->min_padding);
+	fprintf(file, "padding %Iu\n\n", config->min_padding);
 
 	// Leading tabs
 	fputs("; Convert leading tabs to spaces: true or false\n", file);
