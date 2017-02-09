@@ -20,13 +20,13 @@
 #include <vector>
 #include <string>
 #include "ElasticTabstops.h"
+#include "ScintillaGateway.h"
 
 #define MARK_UNDERLINE 20
 #define SC_MARGIN_SYBOL 1
 #define DBG_INDICATORS  8
 
-static sptr_t edit;
-static SciFnDirect func;
+static ScintillaGateway editor;
 static int tab_width_minimum;
 static int tab_width_padding;
 static int char_width;
@@ -37,27 +37,23 @@ enum direction {
 	FORWARDS
 };
 
-static inline LONG_PTR call_edit(UINT msg, DWORD wp = 0, LONG_PTR lp = 0) {
-	return func(edit, msg, wp, lp);
-}
-
 static int get_line_start(int pos) {
-	int line = call_edit(SCI_LINEFROMPOSITION, pos);
-	return call_edit(SCI_POSITIONFROMLINE, line);
+	int line = editor.LineFromPosition(pos);
+	return editor.PositionFromLine(line);
 }
 
 static int get_line_end(int pos) {
-	int line = call_edit(SCI_LINEFROMPOSITION, pos);
-	return call_edit(SCI_GETLINEENDPOSITION, line);
+	int line = editor.LineFromPosition(pos);
+	return editor.GetLineEndPosition(line);
 }
 
 static void clear_debug_marks() {
 #ifdef _DEBUG
 	// Clear all the debugging junk, this way it only shows updates when it is actually recomputed
-	call_edit(SCI_MARKERDELETEALL, MARK_UNDERLINE);
+	editor.MarkerDeleteAll(MARK_UNDERLINE);
 	for (int i = 0; i < DBG_INDICATORS; ++i) {
-		call_edit(SCI_SETINDICATORCURRENT, i);
-		call_edit(SCI_INDICATORCLEARRANGE, 0, call_edit(SCI_GETTEXTLENGTH));
+		editor.SetIndicatorCurrent(i);
+		editor.IndicatorClearRange(0, editor.GetTextLength());
 	}
 #endif
 }
@@ -69,11 +65,11 @@ static int get_text_width_prop(int start, int end) {
 	range.chrg.cpMin = start;
 	range.chrg.cpMax = end;
 	range.lpstrText = &s[0];
-	call_edit(SCI_GETTEXTRANGE, 0, (sptr_t)&range);
+	editor.GetTextRange(&range);
 
-	LONG_PTR style = call_edit(SCI_GETSTYLEAT, start);
+	int style = editor.GetStyleAt(start);
 
-	return call_edit(SCI_TEXTWIDTH, style, (LONG_PTR)range.lpstrText);
+	return editor.TextWidth(style, range.lpstrText);
 }
 
 static int get_text_width_mono(int start, int end) {
@@ -86,15 +82,15 @@ static int calc_tab_width(int text_width_in_tab) {
 }
 
 static bool change_line(int& location, direction which_dir) {
-	int line = call_edit(SCI_LINEFROMPOSITION, location);
+	int line = editor.LineFromPosition(location);
 	if (which_dir == FORWARDS) {
-		location = call_edit(SCI_POSITIONFROMLINE, line + 1);
+		location = editor.PositionFromLine(line + 1);
 	}
 	else {
 		if (line <= 0) {
 			return false;
 		}
-		location = call_edit(SCI_POSITIONFROMLINE, line - 1);
+		location = editor.PositionFromLine(line - 1);
 	}
 	return (location >= 0);
 }
@@ -103,11 +99,11 @@ static int get_nof_tabs_between(int start, int end) {
 	unsigned char current_char = 0;
 	int tabs = 0;
 
-	while (start < end && (current_char = (unsigned char)call_edit(SCI_GETCHARAT, start))) {
+	while (start < end && (current_char = (unsigned char)editor.GetCharAt(start))) {
 		if (current_char == '\t') {
 			tabs++;
 		}
-		start = call_edit(SCI_POSITIONAFTER, start);
+		start = editor.PositionAfter(start);
 	}
 
 	return tabs;
@@ -125,11 +121,11 @@ struct et_tabstop {
 };
 
 static void measure_cells(std::vector<std::vector<et_tabstop>> &grid, int start_line, int end_line, size_t editted_cell) {
-	int current_pos = call_edit(SCI_POSITIONFROMLINE, start_line);
+	int current_pos = editor.PositionFromLine(start_line);
 	direction which_dir = (start_line <= end_line ? FORWARDS : BACKWARDS);
 
 	do {
-		unsigned char current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
+		unsigned char current_char = (unsigned char)editor.GetCharAt(current_pos);
 		const int line_end = get_line_end(current_pos);
 		int cell_start = current_pos;
 		bool cell_empty = true;
@@ -141,9 +137,9 @@ static void measure_cells(std::vector<std::vector<et_tabstop>> &grid, int start_
 				if (cell_num >= editted_cell) {
 #ifdef _DEBUG
 					// Highlight the cell
-					call_edit(SCI_SETINDICATORCURRENT, grid_line.size() % DBG_INDICATORS);
-					if (cell_empty) call_edit(SCI_INDICATORFILLRANGE, current_pos, 1);
-					else call_edit(SCI_INDICATORFILLRANGE, cell_start, current_pos - cell_start + 1);
+					editor.SetIndicatorCurrent(grid_line.size() % DBG_INDICATORS);
+					if (cell_empty) editor.IndicatorFillRange(current_pos, 1);
+					else editor.IndicatorFillRange(cell_start, current_pos - cell_start + 1);
 #endif
 					int text_width_in_tab = 0;
 					if (!cell_empty) {
@@ -164,11 +160,11 @@ static void measure_cells(std::vector<std::vector<et_tabstop>> &grid, int start_
 				}
 			}
 
-			current_pos = call_edit(SCI_POSITIONAFTER, current_pos);
-			current_char = (unsigned char)call_edit(SCI_GETCHARAT, current_pos);
+			current_pos = editor.PositionAfter(current_pos);
+			current_char = (unsigned char)editor.GetCharAt(current_pos);
 		}
 
-		if (grid_line.size() <= editted_cell && !(which_dir == FORWARDS && call_edit(SCI_LINEFROMPOSITION, current_pos) <= end_line)) {
+		if (grid_line.size() <= editted_cell && !(which_dir == FORWARDS && editor.LineFromPosition(current_pos) <= end_line)) {
 			break;
 		}
 
@@ -184,7 +180,7 @@ static void stretch_cells(std::vector<std::vector<et_tabstop>> &grid, size_t sta
 	// Find columns blocks and stretch to fit the widest cell
 	for (size_t t = start_cell; t < max_tabs; t++) {
 		bool starting_new_block = true;
-		int first_line_in_block = 0;
+		size_t first_line_in_block = 0;
 		int max_width = 0;
 		for (size_t l = 0; l < grid.size(); l++) {
 			if (starting_new_block) {
@@ -210,7 +206,7 @@ static void stretch_cells(std::vector<std::vector<et_tabstop>> &grid, size_t sta
 static void stretch_tabstops(int block_edit_linenum, int block_min_end, int editted_cell) {
 	std::vector<std::vector<et_tabstop>> grid;
 	size_t max_tabs = 0;
-	int block_start_linenum;
+	size_t block_start_linenum;
 
 	if (block_edit_linenum > 0) {
 		measure_cells(grid, block_edit_linenum - 1, -1, editted_cell);
@@ -227,8 +223,8 @@ static void stretch_tabstops(int block_edit_linenum, int block_min_end, int edit
 
 #ifdef _DEBUG
 	// Mark the start and end of the block being recomputed
-	call_edit(SCI_MARKERADD, block_start_linenum - 1, MARK_UNDERLINE);
-	call_edit(SCI_MARKERADD, block_start_linenum + grid.size() - 1, MARK_UNDERLINE);
+	editor.MarkerAdd((int)block_start_linenum - 1, MARK_UNDERLINE);
+	editor.MarkerAdd((int)(block_start_linenum + grid.size() - 1), MARK_UNDERLINE);
 #endif
 
 	stretch_cells(grid, editted_cell, max_tabs);
@@ -237,26 +233,26 @@ static void stretch_tabstops(int block_edit_linenum, int block_min_end, int edit
 	std::vector<int> known_tabstops;
 	int cur_tabstop = 0;
 	for (int i = 0; i < editted_cell; i++) {
-		cur_tabstop = call_edit(SCI_GETNEXTTABSTOP, block_start_linenum, cur_tabstop);
+		cur_tabstop = editor.GetNextTabStop((int)block_start_linenum, cur_tabstop);
 		known_tabstops.push_back(cur_tabstop);
 	}
 
 	// Set tabstops
 	for (size_t l = 0; l < grid.size(); l++) {
-		int current_line_num = block_start_linenum + l;
+		size_t current_line_num = block_start_linenum + l;
 		int acc_tabstop = 0;
 
-		call_edit(SCI_CLEARTABSTOPS, current_line_num);
+		editor.ClearTabStops((int)current_line_num);
 
 		// Set any known tabstops
 		for (size_t t = 0; t < known_tabstops.size(); t++) {
 			acc_tabstop = known_tabstops[t];
-			call_edit(SCI_ADDTABSTOP, current_line_num, acc_tabstop);
+			editor.AddTabStop((int)current_line_num, acc_tabstop);
 		}
 
 		for (size_t t = known_tabstops.size(); t < grid[l].size(); t++) {
 			acc_tabstop += *(grid[l][t].widest_width_pix);
-			call_edit(SCI_ADDTABSTOP, current_line_num, acc_tabstop);
+			editor.AddTabStop((int)current_line_num, acc_tabstop);
 		}
 	}
 
@@ -266,14 +262,14 @@ static void stretch_tabstops(int block_edit_linenum, int block_min_end, int edit
 static void replace_nth_tab(int linenum, int cellnum, const char *text) {
 	TextToFind ttf;
 
-	ttf.chrg.cpMin = call_edit(SCI_POSITIONFROMLINE, linenum);
-	ttf.chrg.cpMax = call_edit(SCI_GETLINEENDPOSITION, linenum);
+	ttf.chrg.cpMin = editor.PositionFromLine(linenum);
+	ttf.chrg.cpMax = editor.GetLineEndPosition(linenum);
 	ttf.lpstrText = "\t";
 
 	int position = INVALID_POSITION;
 	int curcell = -1;
 	do {
-		position = call_edit(SCI_FINDTEXT, 0, (LONG_PTR)&ttf);
+		position = editor.FindText(0, &ttf);
 		ttf.chrg.cpMin = position + 1; // Move start of the search forward
 		curcell++;
 	} while (position != INVALID_POSITION && curcell != cellnum);
@@ -282,21 +278,19 @@ static void replace_nth_tab(int linenum, int cellnum, const char *text) {
 		return;
 	}
 
-	call_edit(SCI_SETTARGETRANGE, position, position + 1);
-	call_edit(SCI_REPLACETARGET, -1, (LONG_PTR)text);
+	editor.SetTargetRange(position, position + 1);
+	editor.ReplaceTarget(-1, text);
 }
 
 void ElasticTabstops_SwitchToScintilla(HWND sci, const Configuration *config) {
-	// Get the direct pointer and function. Not the cleanest but it works for now
-	edit = SendMessage(sci, SCI_GETDIRECTPOINTER, 0, 0);
-	func = (SciFnDirect)SendMessage(sci, SCI_GETDIRECTFUNCTION, 0, 0);
+	editor.SetScintillaInstance(sci);
 
 	// Adjust widths based on character size
 	// The width of a tab is (tab_width_minimum + tab_width_padding)
 	// Since the user can adjust the padding we adjust the minimum
-	char_width = call_edit(SCI_TEXTWIDTH, STYLE_DEFAULT, (LONG_PTR)"A");
-	tab_width_padding = char_width * config->min_padding;
-	tab_width_minimum = __max(char_width * call_edit(SCI_GETTABWIDTH) - tab_width_padding, 0);
+	char_width = editor.TextWidth(STYLE_DEFAULT, "A");
+	tab_width_padding = (int)(char_width * config->min_padding);
+	tab_width_minimum = __max(char_width * editor.GetTabWidth() - tab_width_padding, 0);
 
 	get_text_width = get_text_width_prop;
 }
@@ -304,7 +298,7 @@ void ElasticTabstops_SwitchToScintilla(HWND sci, const Configuration *config) {
 void ElasticTabstops_ComputeEntireDoc() {
 	clear_debug_marks();
 
-	stretch_tabstops(0, call_edit(SCI_GETLINECOUNT), 0);
+	stretch_tabstops(0, editor.GetLineCount(), 0);
 }
 
 void ElasticTabstops_OnModify(int start, int end, int linesAdded, const char *text) {
@@ -320,7 +314,7 @@ void ElasticTabstops_OnModify(int start, int end, int linesAdded, const char *te
 		editted_cell = get_nof_tabs_between(get_line_start(start), start);
 	}
 
-	int block_start_linenum = call_edit(SCI_LINEFROMPOSITION, start);
+	int block_start_linenum = editor.LineFromPosition(start);
 
 	stretch_tabstops(block_start_linenum, block_start_linenum + (linesAdded > 0 ? linesAdded : 0), editted_cell);
 }
@@ -329,7 +323,7 @@ void ElasticTabstops_ConvertToSpaces(const Configuration *config) {
 	std::vector<std::vector<et_tabstop>> grid;
 
 	// Recompute the entire document
-	measure_cells(grid, 0, call_edit(SCI_GETLINECOUNT), 0);
+	measure_cells(grid, 0, editor.GetLineCount(), 0);
 
 	clear_debug_marks();
 
@@ -342,9 +336,9 @@ void ElasticTabstops_ConvertToSpaces(const Configuration *config) {
 
 	stretch_cells(grid, 0, max_tabs);
 
-	call_edit(SCI_BEGINUNDOACTION);
+	editor.BeginUndoAction();
 	for (size_t linenum = 0; linenum < grid.size(); ++linenum) {
-		call_edit(SCI_CLEARTABSTOPS, linenum);
+		editor.ClearTabStops((int) linenum);
 
 		int start_cell = 0;
 
@@ -359,18 +353,18 @@ void ElasticTabstops_ConvertToSpaces(const Configuration *config) {
 		}
 
 		// Iterate backwards since tabs are being removed, thus it wouldn't find the correct "nth" tab
-		for (int end_cell = grid[linenum].size() - 1; end_cell >= start_cell; --end_cell) {
+		for (int end_cell = (int)grid[linenum].size() - 1; end_cell >= start_cell; --end_cell) {
 			int spaces = grid[linenum][end_cell].getTabLen() / char_width;
-			replace_nth_tab(linenum, end_cell, std::string(spaces, ' ').c_str());
+			replace_nth_tab((int)linenum, (int)end_cell, std::string(spaces, ' ').c_str());
 		}
 	}
-	call_edit(SCI_ENDUNDOACTION);
+	editor.EndUndoAction();
 }
 
 void ElasticTabstops_OnReady(HWND sci) {
 #ifdef _DEBUG
 	// Setup the markers for start/end of the computed block
-	int mask = SendMessage(sci, SCI_GETMARGINMASKN, SC_MARGIN_SYBOL, 0);
+	int mask = (int)SendMessage(sci, SCI_GETMARGINMASKN, SC_MARGIN_SYBOL, 0);
 	SendMessage(sci, SCI_SETMARGINMASKN, SC_MARGIN_SYBOL, mask | (1 << MARK_UNDERLINE));
 	SendMessage(sci, SCI_MARKERDEFINE, MARK_UNDERLINE, SC_MARK_UNDERLINE);
 	SendMessage(sci, SCI_MARKERSETBACK, MARK_UNDERLINE, 0x77CC77);
