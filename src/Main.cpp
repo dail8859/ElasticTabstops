@@ -64,12 +64,18 @@ static bool shouldProcessCurrentFile() {
 
 		// Make sure it has an extension
 		if (ext[0] != L'\0') {
-			// Search the file extensions, make sure the char after the located string is blank
-			// This makes sure that searching for .c doesn't find .cpp
-			wchar_t *ptr = wcsstr(config.file_extensions, ext);
-			if (ptr) {
-				wchar_t next = ptr[wcslen(ext)];
-				return next == 0 || next == L' ';
+			wchar_t *p = config.file_extensions;
+
+			while (p[0] && (p = wcsstr(p, ext)) != nullptr) {
+				wchar_t next = p[wcslen(ext)];
+
+				// This makes sure that searching for .c doesn't find .cpp
+				if (next == 0 || next == L' ') {
+					return true;
+				}
+				else {
+					while (p[0] != L'\0' && p[0] != L' ') p++;
+				}
 			}
 		}
 	}
