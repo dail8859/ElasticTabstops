@@ -1,4 +1,4 @@
-![Elastic Tabstops logo](https://dl.dropboxusercontent.com/u/13788271/ElasticTabstops/logo.gif)
+![Elastic Tabstops logo](/img/logo.gif)
 
 Notepad++ plugin for [Elastic Tabstops](http://nickgravgaard.com/elastic-tabstops/). 
 
