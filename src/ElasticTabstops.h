@@ -21,8 +21,8 @@
 #include "PluginInterface.h"
 #include "Config.h"
 
-void ElasticTabstops_SwitchToScintilla(HWND sci, const Configuration *config);
-void ElasticTabstops_ComputeEntireDoc();
-void ElasticTabstops_OnModify(int start, int end, int linesAdded, const char *text);
-void ElasticTabstops_ConvertToSpaces(const Configuration *config);
-void ElasticTabstops_OnReady(HWND sci);
+void ElasticTabstopsSwitchToScintilla(HWND sci, const Configuration *config);
+void ElasticTabstopsComputeCurrentView();
+void ElasticTabstopsOnModify(int start, int end, int linesAdded, bool hasTab);
+void ElasticTabstopsConvertToSpaces(const Configuration *config);
+void ElasticTabstopsOnReady(HWND sci);

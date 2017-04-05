@@ -16,6 +16,8 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
+#include <vector>
+
 #include "PluginDefinition.h"
 #include "Version.h"
 #include "ElasticTabstops.h"
@@ -117,6 +119,13 @@ extern "C" __declspec(dllexport) FuncItem * getFuncsArray(int *nbF) {
 
 extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 	static bool isFileEnabled = true;
+	static int numEdits = 0;
+	static struct {
+		int start;
+		int end;
+		int linesAdded;
+		bool hasTab;
+	} edit;
 
 	// Somehow we are getting notifications from other scintilla handles at times
 	if (notify->nmhdr.hwndFrom != nppData._nppHandle &&
@@ -125,6 +134,23 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 		return;
 
 	switch (notify->nmhdr.code) {
+		case SCN_UPDATEUI:
+			if (!config.enabled || !isFileEnabled) break;
+
+			if (notify->updated & SC_UPDATE_V_SCROLL || numEdits > 0) {
+				// A single "edit" can be optimized to potentially update a smaller area
+				// More than 1 is easiest to just update the current view
+				if (numEdits == 1) {
+					ElasticTabstopsOnModify(edit.start, edit.end, edit.linesAdded, edit.hasTab);
+				}
+				else {
+					ElasticTabstopsComputeCurrentView();
+				}
+
+				numEdits = 0;
+			}
+
+			break;
 		case SCN_MODIFIED: {
 			if (!config.enabled || !isFileEnabled) break;
 
@@ -132,18 +158,14 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			bool isDelete = (notify->modificationType & SC_MOD_DELETETEXT) != 0;
 
 			// Make sure we only look at inserts and deletes
-			if (!isInsert && !isDelete) break;
-
-			bool isUserAction = (notify->modificationType & SC_PERFORMED_USER) != 0;
-			bool isUndoRedo = (notify->modificationType & (SC_PERFORMED_REDO | SC_PERFORMED_UNDO)) != 0;
-			bool isLastStep = (notify->modificationType & SC_LASTSTEPINUNDOREDO) != 0;
-
-			// Undo/Redo can come in multiple steps. Only update tabstops on the last step.
-			// This can help to reduce lag spikes on complex undo/redo actions
-			if (isUserAction || (isUndoRedo && isLastStep)) {
-				int start = notify->position;
-				int end = (isInsert ? notify->position + notify->length : notify->position);
-				ElasticTabstops_OnModify(start, end, notify->linesAdded, notify->text);
+			if (isInsert || isDelete) {
+				numEdits++;
+				if (numEdits == 1) {
+					edit.start = notify->position;
+					edit.end = (isInsert ? notify->position + notify->length : notify->position);
+					edit.linesAdded = notify->linesAdded;
+					edit.hasTab = strchr(notify->text, '\t') != NULL;
+				}
 			}
 
 			break;
@@ -151,17 +173,18 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 		case SCN_ZOOM: {
 			if (!config.enabled || !isFileEnabled) break;
 
-			// Redo the entire document since the tab sizes have changed
-			ElasticTabstops_SwitchToScintilla(getCurrentScintilla(), &config);
-			ElasticTabstops_ComputeEntireDoc();
+			// Redo the current view since the tab sizes have changed
+			ElasticTabstopsSwitchToScintilla(getCurrentScintilla(), &config);
+			ElasticTabstopsComputeCurrentView();
+
 			break;
 		}
 		case NPPN_READY:
 			CheckMenuItem(GetMenu(nppData._nppHandle), funcItem[0]._cmdID, config.enabled ? MF_CHECKED : MF_UNCHECKED);
-			ElasticTabstops_OnReady(nppData._scintillaMainHandle);
-			ElasticTabstops_OnReady(nppData._scintillaSecondHandle);
-			ElasticTabstops_SwitchToScintilla(getCurrentScintilla(), &config);
-			if (config.enabled) ElasticTabstops_ComputeEntireDoc();
+			ElasticTabstopsOnReady(nppData._scintillaMainHandle);
+			ElasticTabstopsOnReady(nppData._scintillaSecondHandle);
+			ElasticTabstopsSwitchToScintilla(getCurrentScintilla(), &config);
+			if (config.enabled) ElasticTabstopsComputeCurrentView();
 			break;
 		case NPPN_SHUTDOWN:
 			ConfigSave(&nppData, &config);
@@ -172,8 +195,9 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			isFileEnabled = shouldProcessCurrentFile();
 
 			if (isFileEnabled) {
-				ElasticTabstops_SwitchToScintilla(getCurrentScintilla(), &config);
-				ElasticTabstops_ComputeEntireDoc();
+				ElasticTabstopsSwitchToScintilla(getCurrentScintilla(), &config);
+				ElasticTabstopsComputeCurrentView();
+				numEdits = 0;
 			}
 
 			break;
@@ -185,8 +209,8 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 				CheckMenuItem(GetMenu(nppData._nppHandle), funcItem[0]._cmdID, config.enabled ? MF_CHECKED : MF_UNCHECKED);
 
 				// Immediately apply the new config to the config file itself
-				ElasticTabstops_SwitchToScintilla(getCurrentScintilla(), &config);
-				ElasticTabstops_ComputeEntireDoc();
+				ElasticTabstopsSwitchToScintilla(getCurrentScintilla(), &config);
+				ElasticTabstopsComputeCurrentView();
 			}
 			break;
 		}
@@ -207,8 +231,8 @@ static void toggleEnabled() {
 	SendMessage(nppData._nppHandle, NPPM_SETMENUITEMCHECK, funcItem[0]._cmdID, config.enabled);
 
 	if (config.enabled && shouldProcessCurrentFile()) {
-		// Run it on the entire file
-		ElasticTabstops_ComputeEntireDoc();
+		// Run it on the current file
+		ElasticTabstopsComputeCurrentView();
 	}
 	else {
 		// Clear all tabstops on the file
@@ -226,7 +250,7 @@ static void convertEtToSpaces() {
 	// Temporarily disable elastic tabstops because replacing tabs with spaces causes
 	// Scintilla to send notifications of all the changes.
 	config.enabled = false;
-	ElasticTabstops_ConvertToSpaces(&config);
+	ElasticTabstopsConvertToSpaces(&config);
 	config.enabled = true;
 }
 

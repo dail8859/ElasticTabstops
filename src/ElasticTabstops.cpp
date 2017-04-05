@@ -32,6 +32,9 @@ static int tab_width_padding;
 static int char_width;
 static int(*get_text_width)(int start, int end);
 
+static int startLine;
+static int endLine;
+
 enum direction {
 	BACKWARDS,
 	FORWARDS
@@ -171,6 +174,9 @@ static void measure_cells(std::vector<std::vector<et_tabstop>> &grid, int start_
 		grid.push_back(grid_line);
 
 		if (current_char == '\0') break;
+
+		int cur_line = editor.LineFromPosition(current_pos);
+		if (cur_line < startLine || cur_line > endLine) break;
 	} while (change_line(current_pos, which_dir));
 
 	return;
@@ -282,7 +288,7 @@ static void replace_nth_tab(int linenum, int cellnum, const char *text) {
 	editor.ReplaceTarget(-1, text);
 }
 
-void ElasticTabstops_SwitchToScintilla(HWND sci, const Configuration *config) {
+void ElasticTabstopsSwitchToScintilla(HWND sci, const Configuration *config) {
 	editor.SetScintillaInstance(sci);
 
 	// Adjust widths based on character size
@@ -295,18 +301,28 @@ void ElasticTabstops_SwitchToScintilla(HWND sci, const Configuration *config) {
 	get_text_width = get_text_width_prop;
 }
 
-void ElasticTabstops_ComputeEntireDoc() {
-	clear_debug_marks();
+void ElasticTabstopsComputeCurrentView() {
+	int linesOnScreen = editor.LinesOnScreen();
+	startLine = editor.GetFirstVisibleLine();
+	endLine = startLine + linesOnScreen + 1;
 
-	stretch_tabstops(0, editor.GetLineCount(), 0);
+	// Expand up to 1 "screen" worth in both directions
+	startLine -= linesOnScreen;
+	endLine += linesOnScreen;
+
+	startLine = __max(startLine, 0);
+	endLine = __min(endLine, editor.GetLineCount());
+
+	clear_debug_marks();
+	stretch_tabstops(startLine, endLine, 0);
 }
 
-void ElasticTabstops_OnModify(int start, int end, int linesAdded, const char *text) {
+void ElasticTabstopsOnModify(int start, int end, int linesAdded, bool hasTab) {
 	clear_debug_marks();
 
 	int editted_cell = 0;
 	// If the modifications happen on a single line and doesnt add/remove tabs, we can do some heuristics to skip some computations
-	if (linesAdded == 0 && strchr(text, '\t') == NULL) {
+	if (linesAdded == 0 && !hasTab) {
 		// See if there are any tabs after the inserted/removed text
 		if (get_nof_tabs_between(end, get_line_end(end)) == 0) return;
 
@@ -319,10 +335,12 @@ void ElasticTabstops_OnModify(int start, int end, int linesAdded, const char *te
 	stretch_tabstops(block_start_linenum, block_start_linenum + (linesAdded > 0 ? linesAdded : 0), editted_cell);
 }
 
-void ElasticTabstops_ConvertToSpaces(const Configuration *config) {
+void ElasticTabstopsConvertToSpaces(const Configuration *config) {
 	std::vector<std::vector<et_tabstop>> grid;
 
 	// Recompute the entire document
+	startLine = 0;
+	endLine = editor.GetLineCount();
 	measure_cells(grid, 0, editor.GetLineCount(), 0);
 
 	clear_debug_marks();
@@ -361,7 +379,7 @@ void ElasticTabstops_ConvertToSpaces(const Configuration *config) {
 	editor.EndUndoAction();
 }
 
-void ElasticTabstops_OnReady(HWND sci) {
+void ElasticTabstopsOnReady(HWND sci) {
 #ifdef _DEBUG
 	// Setup the markers for start/end of the computed block
 	int mask = (int)SendMessage(sci, SCI_GETMARGINMASKN, SC_MARGIN_SYBOL, 0);
