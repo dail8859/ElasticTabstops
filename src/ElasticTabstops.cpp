@@ -294,7 +294,7 @@ void ElasticTabstopsSwitchToScintilla(HWND sci, const Configuration *config) {
 	// Adjust widths based on character size
 	// The width of a tab is (tab_width_minimum + tab_width_padding)
 	// Since the user can adjust the padding we adjust the minimum
-	char_width = editor.TextWidth(STYLE_DEFAULT, "A");
+	char_width = editor.TextWidth(STYLE_DEFAULT, " ");
 	tab_width_padding = (int)(char_width * config->min_padding);
 	tab_width_minimum = __max(char_width * editor.GetTabWidth() - tab_width_padding, 0);
 
