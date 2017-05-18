@@ -56,9 +56,6 @@ static HWND getCurrentScintilla() {
 }
 
 static bool shouldProcessCurrentFile() {
-	// See if the file is even using tabs first of all
-	if (SendMessage(getCurrentScintilla(), SCI_GETUSETABS, 0, 0) == 0) return false;
-
 	// Check the file extension
 	if (config.file_extensions != nullptr) {
 		wchar_t ext[MAX_PATH] = { 0 };
