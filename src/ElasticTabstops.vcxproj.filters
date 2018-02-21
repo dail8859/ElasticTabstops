@@ -15,65 +15,65 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\AboutDialog.h">
+    <ClInclude Include="AboutDialog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\ElasticTabstops.h">
+    <ClInclude Include="ElasticTabstops.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\Hyperlinks.h">
+    <ClInclude Include="Hyperlinks.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\menuCmdID.h">
+    <ClInclude Include="menuCmdID.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\Notepad_plus_msgs.h">
+    <ClInclude Include="Notepad_plus_msgs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\PluginDefinition.h">
+    <ClInclude Include="PluginDefinition.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\PluginInterface.h">
+    <ClInclude Include="PluginInterface.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\resource.h">
+    <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\Scintilla.h">
+    <ClInclude Include="Scintilla.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\Version.h">
+    <ClInclude Include="Version.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\Config.h">
+    <ClInclude Include="Config.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\ScintillaGateway.h">
+    <ClInclude Include="ScintillaGateway.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="src\resource.rc">
+    <ResourceCompile Include="resource.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-    <ResourceCompile Include="src\Version.rc">
+    <ResourceCompile Include="Version.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\Main.cpp">
+    <ClCompile Include="Main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\Hyperlinks.cpp">
+    <ClCompile Include="Hyperlinks.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\ElasticTabstops.cpp">
+    <ClCompile Include="ElasticTabstops.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\Config.cpp">
+    <ClCompile Include="Config.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\AboutDialog.cpp">
+    <ClCompile Include="AboutDialog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

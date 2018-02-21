@@ -2,6 +2,8 @@
 
 Notepad++ plugin for [Elastic Tabstops](http://nickgravgaard.com/elastic-tabstops/). 
 
+[![Build status](https://ci.appveyor.com/api/projects/status/github/dail8859/ElasticTabstops?branch=master&svg=true)](https://ci.appveyor.com/project/dail8859/ElasticTabstops/branch/master)
+
 ## Installation
 The easiest way to install this is through the PluginManager. You can also download one of the [releases](https://github.com/dail8859/ElasticTabstops/releases) and extract the DLL. Copy this into Notepad++'s plugin directory. This will either be located in the installation directory or under `%APPDATA%\Notepad++\plugins`.
 
