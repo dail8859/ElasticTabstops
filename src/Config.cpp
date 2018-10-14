@@ -99,9 +99,9 @@ void ConfigSave(const NppData *nppData, const Configuration *config) {
 	fprintf(file, "enabled %s\n\n", config->enabled == true ? "true" : "false");
 
 	// The file extensions to appy it to
-	fputs("; File extentions to apply elastic tabstops. For example...\n", file);
-	fputs(";   \"extentions *\" will apply it to all files\n", file);
-	fputs(";   \"extentions .c .h .cpp .hpp\" will apply it to C/C++ files\n", file);
+	fputs("; File extensions to apply elastic tabstops. For example...\n", file);
+	fputs(";   \"extensions *\" will apply it to all files\n", file);
+	fputs(";   \"extensions .c .h .cpp .hpp\" will apply it to C/C++ files\n", file);
 	if (config->file_extensions != nullptr) wcstombs(s, config->file_extensions, 256);
 	else strcpy(s, "*");
 	fprintf(file, "extensions %s\n\n", s);
