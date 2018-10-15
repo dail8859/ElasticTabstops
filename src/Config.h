@@ -20,9 +20,11 @@
 
 #include "PluginDefinition.h"
 
+#include <vector>
+
 typedef struct Configuration{
 	bool enabled;
-	wchar_t *file_extensions;
+	std::vector<std::string> file_extensions;
 	size_t min_padding;
 	bool convert_leading_tabs_to_spaces;
 }Configuration;

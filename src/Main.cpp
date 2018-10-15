@@ -27,7 +27,7 @@
 
 static HANDLE _hModule;
 static NppData nppData;
-static Configuration config = { true, nullptr, 1, false};
+static Configuration config = { true, {}, 1, false };
 
 // Helper functions
 static HWND getCurrentScintilla();
@@ -57,29 +57,19 @@ static HWND getCurrentScintilla() {
 
 static bool shouldProcessCurrentFile() {
 	// Check the file extension
-	if (config.file_extensions != nullptr) {
-		wchar_t ext[MAX_PATH] = { 0 };
-		SendMessage(nppData._nppHandle, NPPM_GETEXTPART, MAX_PATH, (LPARAM)ext);
+	wchar_t buffer[MAX_PATH] = { 0 };
+	SendMessage(nppData._nppHandle, NPPM_GETEXTPART, MAX_PATH, (LPARAM)buffer);
+	std::wstring wext(buffer);
+	std::string ext(wext.begin(), wext.end());
 
-		// Make sure it has an extension
-		if (ext[0] != L'\0') {
-			wchar_t *p = config.file_extensions;
+	for (const auto &extension: config.file_extensions) {
+		if (extension == "*") return true;
+		if (extension == "!*") return false;
 
-			while (p[0] && (p = wcsstr(p, ext)) != nullptr) {
-				wchar_t next = p[wcslen(ext)];
-
-				// This makes sure that searching for .c doesn't find .cpp
-				if (next == 0 || next == L' ') {
-					return true;
-				}
-				else {
-					while (p[0] != L'\0' && p[0] != L' ') p++;
-				}
-			}
+		bool not = extension[0] == '!';
+		if (extension.compare(not ? 1 : 0, std::string::npos, ext) == 0) {
+			return !not;
 		}
-	}
-	else {
-		return true;
 	}
 
 	return false;

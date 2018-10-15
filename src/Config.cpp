@@ -17,7 +17,31 @@
 // Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 #include <stdio.h>
+#include <sstream>
 #include "Config.h"
+
+template <typename T, typename U>
+static std::string join(const std::vector<T> &v, const U &delim) {
+	std::stringstream ss;
+	for (size_t i = 0; i < v.size(); ++i) {
+		if (i != 0) ss << delim;
+		ss << v[i];
+	}
+	return ss.str();
+}
+
+static std::vector<std::string> split(std::string const &str, const char delim) {
+	size_t start;
+	size_t end = 0;
+	std::vector<std::string> out;
+
+	while ((start = str.find_first_not_of(delim, end)) != std::string::npos) {
+		end = str.find(delim, start);
+		out.push_back(str.substr(start, end - start));
+	}
+
+	return out;
+}
 
 const wchar_t *GetIniFilePath(const NppData *nppData) {
 	static wchar_t iniPath[MAX_PATH];
@@ -48,22 +72,14 @@ void ConfigLoad(const NppData *nppData, Configuration *config) {
 			config->enabled = strncmp(c, "true", 4) == 0;
 		}
 		else if (strncmp(line, "extensions ", 11) == 0) {
-			if (config->file_extensions != nullptr) {
-				free(config->file_extensions);
-				config->file_extensions = nullptr;
+			if (!config->file_extensions.empty()) {
+				config->file_extensions.clear();
 			}
 
 			// Strip the newline
 			line[strcspn(line, "\r\n")] = 0;
 
-			char *c = &line[11];
-			while (isspace(*c)) c++;
-
-			if (*c == '\0' || *c == '*') continue;
-
-			wchar_t ws[256];
-			mbstowcs(ws, c, 256);
-			config->file_extensions = wcsdup(ws);
+			config->file_extensions = split(&line[11], ' ');
 		}
 		else if (strncmp(line, "padding ", 8) == 0) {
 			char *c = &line[8];
@@ -86,7 +102,6 @@ void ConfigLoad(const NppData *nppData, Configuration *config) {
 }
 
 void ConfigSave(const NppData *nppData, const Configuration *config) {
-	char s[256];
 	const wchar_t *iniPath = GetIniFilePath(nppData);
 
 	FILE *file = _wfopen(iniPath, L"w");
@@ -101,10 +116,12 @@ void ConfigSave(const NppData *nppData, const Configuration *config) {
 	// The file extensions to appy it to
 	fputs("; File extensions to apply elastic tabstops. For example...\n", file);
 	fputs(";   \"extensions *\" will apply it to all files\n", file);
-	fputs(";   \"extensions .c .h .cpp .hpp\" will apply it to C/C++ files\n", file);
-	if (config->file_extensions != nullptr) wcstombs(s, config->file_extensions, 256);
-	else strcpy(s, "*");
-	fprintf(file, "extensions %s\n\n", s);
+	fputs(";   \"extensions .c .h .cpp .hpp\" will apply it to only C/C++ files\n", file);
+	fputs(";   \"extensions !.txt !.py *\" will apply it to all files except for text and Python files\n", file);
+	if (!config->file_extensions.empty())
+		fprintf(file, "extensions %s\n\n", join(config->file_extensions, ' ').c_str());
+	else
+		fprintf(file, "extensions *\n\n");
 
 	// Minimum padding
 	fputs("; Minimum padding in characters. Must be > 0\n", file);
