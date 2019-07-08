@@ -104,7 +104,7 @@ extern "C" __declspec(dllexport) FuncItem * getFuncsArray(int *nbF) {
 	return funcItem;
 }
 
-extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
+extern "C" __declspec(dllexport) void beNotified(SCNotification *notify) {
 	static bool isFileEnabled = true;
 	static int numEdits = 0;
 	static struct {
@@ -148,9 +148,9 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification *notify) {
 			if (isInsert || isDelete) {
 				numEdits++;
 				if (numEdits == 1) {
-					edit.start = notify->position;
-					edit.end = (isInsert ? notify->position + notify->length : notify->position);
-					edit.linesAdded = notify->linesAdded;
+					edit.start = static_cast<int>(notify->position);
+					edit.end = static_cast<int>((isInsert ? notify->position + notify->length : notify->position));
+					edit.linesAdded = static_cast<int>(notify->linesAdded);
 					edit.hasTab = strchr(notify->text, '\t') != NULL;
 				}
 			}

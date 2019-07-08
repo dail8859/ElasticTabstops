@@ -20,13 +20,13 @@
 #include <vector>
 #include <string>
 #include "ElasticTabstops.h"
-#include "ScintillaGateway.h"
+#include "ScintillaEditor.h"
 
 #define MARK_UNDERLINE 20
 #define SC_MARGIN_SYBOL 1
 #define DBG_INDICATORS  8
 
-static ScintillaGateway editor;
+static ScintillaEditor editor;
 static int tab_width_minimum;
 static int tab_width_padding;
 static int char_width;
@@ -64,7 +64,7 @@ static void clear_debug_marks() {
 static int get_text_width_prop(int start, int end) {
 	std::string s(end - start + 1, 0);
 
-	TextRange range;
+	Sci_TextRange range;
 	range.chrg.cpMin = start;
 	range.chrg.cpMax = end;
 	range.lpstrText = &s[0];
@@ -266,7 +266,7 @@ static void stretch_tabstops(int block_edit_linenum, int block_min_end, int edit
 }
 
 static void replace_nth_tab(int linenum, int cellnum, const char *text) {
-	TextToFind ttf;
+	Sci_TextToFind ttf;
 
 	ttf.chrg.cpMin = editor.PositionFromLine(linenum);
 	ttf.chrg.cpMax = editor.GetLineEndPosition(linenum);
