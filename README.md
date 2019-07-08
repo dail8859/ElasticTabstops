@@ -5,10 +5,10 @@ Notepad++ plugin for [Elastic Tabstops](http://nickgravgaard.com/elastic-tabstop
 [![Build status](https://ci.appveyor.com/api/projects/status/github/dail8859/ElasticTabstops?branch=master&svg=true)](https://ci.appveyor.com/project/dail8859/ElasticTabstops/branch/master)
 
 ## Installation
-The easiest way to install this is through the PluginManager. You can also download one of the [releases](https://github.com/dail8859/ElasticTabstops/releases) and extract the DLL. Copy this into Notepad++'s plugin directory. This will either be located in the installation directory or under `%APPDATA%\Notepad++\plugins`.
+Use the built in Plugin Admin to install the plugin.
 
 ## Development
-The code has been developed using MSVC 2015. Building the Release configuration will generate the DLL which can be used by Notepad++. For convenience, MSVC copies the built DLL into the Notepad++ plugin directory. 
+The code is developed using Visual Studio 2017. Building the code will generate a DLL which can be used by Notepad++. For convenience, Visual Studio copies the DLL into the Notepad++ plugin directory.
 
 ## License
 This code is released under the [GNU General Public License version 2](http://www.gnu.org/licenses/gpl-2.0.txt).
