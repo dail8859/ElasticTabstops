@@ -151,7 +151,7 @@ extern "C" __declspec(dllexport) void beNotified(SCNotification *notify) {
 					edit.start = static_cast<int>(notify->position);
 					edit.end = static_cast<int>((isInsert ? notify->position + notify->length : notify->position));
 					edit.linesAdded = static_cast<int>(notify->linesAdded);
-					edit.hasTab = strchr(notify->text, '\t') != NULL;
+					edit.hasTab = notify->text && strchr(notify->text, '\t') != NULL;
 				}
 			}
 
