@@ -27,7 +27,7 @@
 
 static HANDLE _hModule;
 static NppData nppData;
-static Configuration config = { true, {}, 1, false };
+static Configuration config = { true, {"*"}, 1, false };
 
 // Helper functions
 static HWND getCurrentScintilla();
