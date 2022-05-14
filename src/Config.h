@@ -21,6 +21,7 @@
 #include "PluginDefinition.h"
 
 #include <vector>
+#include <string>
 
 typedef struct Configuration{
 	bool enabled;
